@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>UNO - Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          animation: {
+            neon: 'pulse 2s infinite',
+            pulse3D: 'pulse3D 2s ease-in-out infinite'
+          },
+          boxShadow: {
+            neonPurple: '0 0 10px #a855f7, 0 0 20px #a855f7, 0 0 30px #9333ea',
+          },
+          colors: {
+            'uno-purple': '#9333ea',
+          },
+          keyframes: {
+            pulse3D: {
+              '0%, 100%': { transform: 'scale(1)' },
+              '50%': { transform: 'scale(1.03)' },
+            }
+          },
+          backgroundImage: {
+            radial: 'radial-gradient(ellipse at top, var(--tw-gradient-stops))',
+          }
+        },
+      }
+    }
+  </script>
+</head>
+<body class="relative min-h-screen bg-radial from-purple-800 via-fuchsia-900 to-black text-white flex items-center justify-center">
+
+  <!-- Back Button -->
+  <a href="/" class="fixed top-6 left-6 z-50 text-purple-300 hover:text-purple-100 font-bold text-lg uppercase tracking-wide flex items-center gap-2 bg-black/80 px-5 py-3 rounded-full border border-purple-500/30 hover:border-purple-500/50 transition-all duration-300 hover:-translate-x-1">
+    <span class="text-2xl">←</span> Back
+  </a>
+
+  <!-- Particle Background -->
+  <div id="particles" class="absolute inset-0 -z-10"></div>
+
+  <!-- Login Box -->
+  <div class="z-10 bg-black/40 backdrop-blur-xl border border-purple-500/20 p-10 rounded-3xl shadow-neonPurple max-w-md w-full animate-pulse3D">
+    <h1 class="text-center text-4xl font-bold bg-gradient-to-r from-purple-300 via-white to-purple-300 bg-clip-text text-transparent tracking-wider drop-shadow-2xl mb-8">UNO Login</h1>
+
+    <form action="/auth/login" method="POST" class="space-y-6">
+      <div>
+        <label for="username" class="block text-sm font-semibold tracking-wide uppercase text-gray-200 mb-2">Username</label>
+        <input type="text" id="username" name="username" required class="w-full px-4 py-3 rounded-lg bg-white/5 text-white border border-purple-500/20 focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+      </div>
+      <div>
+        <label for="password" class="block text-sm font-semibold tracking-wide uppercase text-gray-200 mb-2">Password</label>
+        <input type="password" id="password" name="password" required class="w-full px-4 py-3 rounded-lg bg-white/5 text-white border border-purple-500/20 focus:outline-none focus:ring-2 focus:ring-purple-500"/>
+      </div>
+
+      <% if (messages.error) { %>
+        <div class="bg-fuchsia-700/80 text-white text-sm rounded-lg px-4 py-3 text-center animate-pulse shadow-md">
+          <%= messages.error %>
+        </div>
+      <% } %>
+
+      <button type="submit" class="w-full py-3 rounded-xl bg-gradient-to-r from-purple-600 to-purple-400 text-white font-bold tracking-wider uppercase hover:scale-105 transition-transform duration-300 shadow-lg shadow-purple-500/30">
+        Login
+      </button>
+    </form>
+
+    <div class="text-center mt-6 text-sm text-gray-400">
+      Don't have an account? <a href="/auth/signup" class="text-purple-400 hover:underline">Sign up here</a>
+    </div>
+  </div>
+
+  <!-- Particles -->
+  <script>
+    function createParticle() {
+      const container = document.getElementById('particles');
+      const particle = document.createElement('div');
+      particle.className = 'absolute w-16 h-24 opacity-10 bg-purple-600 rounded-lg blur-xl';
+      particle.style.left = `${Math.random() * 100}%`;
+      particle.style.top = '120vh';
+      const duration = 10000 + Math.random() * 10000;
+
+      particle.animate([
+        { transform: 'translateY(0)' },
+        { transform: 'translateY(-150vh)' }
+      ], {
+        duration,
+        easing: 'linear',
+        iterations: 1
+      }).onfinish = () => {
+        particle.remove();
+        createParticle();
+      };
+
+      container.appendChild(particle);
+    }
+
+    for (let i = 0; i < 20; i++) {
+      setTimeout(createParticle, i * 400);
+    }
+  </script>
+</body>
+</html>
