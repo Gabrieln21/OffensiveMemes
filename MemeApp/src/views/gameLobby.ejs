@@ -90,7 +90,7 @@
         <div class="max-w-4xl mx-auto grid md:grid-cols-2 gap-8">
             <!-- Create Game Card -->
             <div class="bg-black/30 backdrop-blur-lg border border-white/10 rounded-3xl p-8 transform transition-all duration-300 hover:scale-[1.02] hover:-translate-y-2 hover:shadow-2xl group cursor-pointer"
-                 onclick="createGame()">
+                 onclick="autoCreateGame()">
                 <div class="relative h-full flex flex-col items-center justify-center text-center p-6">
                     <div class="text-5xl mb-6 transform group-hover:scale-110 transition-transform duration-300">🎮</div>
                     <h3 class="text-3xl font-bold mb-4 bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">Create Game</h3>
@@ -125,57 +125,42 @@
 <script>
     const socket = io();
 
-    function createGame() {
-        const passcode = prompt('Enter a 4-digit passcode for your game:');
-        if (!passcode) return;
-
-        if (!/^\d{4}$/.test(passcode)) {
-            alert('Passcode must be exactly 4 digits');
-            return;
-        }
-
-        socket.emit('create_game', { passcode }, (response) => {
+    function autoCreateGame() {
+        const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
+        socket.emit('create_game', { passcode: randomCode }, (response) => {
             console.log('Create game response:', response);
             if (response.error) {
                 alert(response.error);
             } else if (response.success && response.gameId) {
-                console.log('Redirecting to waiting room:', `/games/waiting/${response.gameId}`);
                 window.location.href = `/games/waiting/${response.gameId}`;
-            } else {
-                alert('Something went wrong creating the game');
             }
         });
     }
+
     function joinGame(passcode) {
         if (!passcode) {
             passcode = prompt('Enter the 4-digit game passcode:');
             if (!passcode) return;
         }
 
-        if (!/^\d{4}$/.test(passcode)) {
+        if (!/^[0-9]{4}$/.test(passcode)) {
             alert('Passcode must be exactly 4 digits');
             return;
         }
+
         socket.emit('join_game', { passcode }, (response) => {
             if (response.error) {
                 alert(response.error);
             } else {
-                alert('Successfully joined the game!');
                 window.location.href = `/games/waiting/${response.gameId}`;
             }
         });
     }
 
-    // Socket.IO event handlers
     socket.on('games_update', (games) => {
         updateActiveGames(games);
     });
 
-    socket.on('player_joined', (data) => {
-        console.log(`${data.username} joined the game`);
-    });
-
-    // Function to update active games display
     function updateActiveGames(games) {
         const container = document.getElementById('activeGames');
         if (!games || games.length === 0) {
@@ -204,7 +189,6 @@
         `).join('');
     }
 
-    // Initial games fetch
     socket.emit('get_games', {}, (response) => {
         if (response.games) {
             updateActiveGames(response.games);
