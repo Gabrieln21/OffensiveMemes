@@ -184,17 +184,9 @@ const startServer = async (): Promise<void> => {
             
                         // ✅ Ensure ALL players have their avatarUrl assigned from session
                         game.players.forEach(p => {
-                            if (!p.avatarUrl || p.avatarUrl === '/uploads/avatars/default-avatar.png') {
-                                if (sessionUser?.avatarUrl) {
-                                    p.avatarUrl = sessionUser.avatarUrl;
-            
-                                    // Persist it to the global game state
-                                    const existingPlayer = game.players.find(existing => existing.id === p.id);
-                                    if (existingPlayer) {
-                                        existingPlayer.avatarUrl = sessionUser.avatarUrl;
-                                    }
-                                }
-                            }
+                            if (!player.avatarUrl || player.avatarUrl === '/uploads/avatars/default-avatar.png') {
+                                player.avatarUrl = sessionUser?.avatarUrl || '/uploads/avatars/default-avatar.png';
+                            }                 
                         });
 
                         if (!player.winning_message && sessionUser?.winning_message) {

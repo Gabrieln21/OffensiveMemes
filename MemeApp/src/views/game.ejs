@@ -1615,17 +1615,7 @@
                 messageInput.value = '';
             }
         };
-        /*
-        socket.on('game_chat', (data) => {
-            const messageEl = document.createElement('div');
-            messageEl.className = 'bg-black/30 rounded-lg p-3 break-words';
-            messageEl.innerHTML = `
-                <span class="text-purple-400 font-semibold">${data.username}:</span>
-                <span class="ml-2 text-white">${data.message}</span>`;
-            messagesContainer.appendChild(messageEl);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        });
-        */
+        
         // ✅ Chat toggle logic goes HERE
         const toggleChatBtn = document.getElementById('toggleChatBtn');
         const chatSidebar = document.getElementById('chatSidebar');
