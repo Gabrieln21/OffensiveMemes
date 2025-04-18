@@ -163,13 +163,16 @@
 
 
         <!-- Meme Lightbox Modal (Expand on click) -->
-        <div id="memeLightbox"
-        class="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm hidden justify-center items-center cursor-zoom-out transition-all duration-300">
-        <img id="memeFullImage"
-        src=""
-        alt="Full Meme"
-        class="max-w-full max-h-[90vh] rounded-xl shadow-2xl border-4 border-white animate-scaleUp" />
+        <div id="memeLightbox" class="fixed inset-0 bg-black/90 z-[9999] hidden justify-center items-center">
+            <!-- Close Button -->
+            <button id="closeLightboxBtn"
+              class="absolute top-6 right-6 text-white text-3xl font-bold bg-black/50 rounded-full w-12 h-12 flex items-center justify-center hover:bg-red-600 transition-all duration-200 shadow-lg z-[10000]">
+              ✕
+            </button>
+          
+            <img id="memeFullImage" src="" class="max-w-full max-h-full rounded-lg shadow-lg" />
         </div>
+          
 
 
 
@@ -1362,6 +1365,13 @@
             fullImage.src = '';
             }
         }
+        });
+        document.getElementById('closeLightboxBtn')?.addEventListener('click', () => {
+            const lightbox = document.getElementById('memeLightbox');
+            const fullImage = document.getElementById('memeFullImage');
+            lightbox.classList.add('hidden');
+            lightbox.classList.remove('flex');
+            fullImage.src = '';
         });
 
 
