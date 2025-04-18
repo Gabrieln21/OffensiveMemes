@@ -203,10 +203,16 @@
     <!-- Chat Sidebar -->
     <div id="chatSidebar" class="fixed right-0 top-0 bottom-0 w-80 bg-black/80 border-l border-white/10 flex flex-col z-[9999] transition-transform duration-300 translate-x-full">
 
-        <!-- Toggle Button -->
-        <button id="toggleChatBtn" class="absolute left-[-40px] top-4 w-10 h-10 bg-purple-600 hover:bg-purple-700 text-white rounded-l-lg flex items-center justify-center z-50">
+        <!-- ✅ Corrected Toggle Button with Bubble Inside -->
+        <button id="toggleChatBtn" class="absolute left-[-40px] top-4 w-10 h-10 bg-purple-600 hover:bg-purple-700 text-white rounded-l-lg flex items-center justify-center z-50 relative">
             🡸
+        <!-- 🔴 Red Bubble Positioned Inside -->
+        <div id="chatUnreadBubble" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center z-[9999] hidden">
+            !
+        </div>
         </button>
+
+
 
         <!-- Chat Header -->
         <div class="p-4 border-b border-white/10">
@@ -1028,16 +1034,6 @@
             if (player) player.score = data.totalScore;
         });
 
-
-        socket.on('game_chat', (data) => {
-            const messageEl = document.createElement('div');
-            messageEl.className = 'bg-black/30 rounded-lg p-3 break-words';
-            messageEl.innerHTML = `
-                <span class="text-purple-400 font-semibold">${data.username}:</span>
-                <span class="ml-2 text-white">${data.message}</span>`;
-            messagesContainer.appendChild(messageEl);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        });
         // Leave the rest of your code (chat form, UI updates, etc.) as is.
 
         // Place this near the top or bottom of your main game JS
@@ -1628,27 +1624,55 @@
         const chatForm = document.getElementById('chatForm');
         const messageInput = document.getElementById('messageInput');
         const messagesContainer = document.getElementById('messages');
+        const toggleChatBtn = document.getElementById('toggleChatBtn');
+        const chatSidebar = document.getElementById('chatSidebar');
+        const chatUnreadBubble = document.getElementById('chatUnreadBubble');
 
+        // Handle sending chat messages
+        if (chatForm && messageInput) {
         chatForm.onsubmit = (e) => {
             e.preventDefault();
             const message = messageInput.value.trim();
             if (message) {
-                socket.emit('game_chat', { gameId, message });
-                messageInput.value = '';
+            socket.emit('game_chat', { gameId, message });
+            messageInput.value = '';
             }
         };
-        
-        // ✅ Chat toggle logic goes HERE
-        const toggleChatBtn = document.getElementById('toggleChatBtn');
-        const chatSidebar = document.getElementById('chatSidebar');
-
-        if (toggleChatBtn && chatSidebar) {
-            toggleChatBtn.addEventListener('click', () => {
-                const isHidden = chatSidebar.classList.contains('translate-x-full');
-                chatSidebar.classList.toggle('translate-x-full', !isHidden);
-                chatSidebar.classList.toggle('translate-x-0', isHidden);
-            });
         }
+
+        // Chat toggle logic
+        if (toggleChatBtn && chatSidebar && chatUnreadBubble) {
+        toggleChatBtn.addEventListener('click', () => {
+            const isHidden = chatSidebar.classList.contains('translate-x-full');
+
+            chatSidebar.classList.toggle('translate-x-full', !isHidden);
+            chatSidebar.classList.toggle('translate-x-0', isHidden);
+
+            // Hide bubble if chat was just opened
+            if (!isHidden) {
+            chatUnreadBubble.classList.add('hidden');
+            }
+        });
+
+        // Listen for new chat messages
+        socket.on('game_chat', (data) => {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'bg-black/30 rounded-lg p-3 break-words';
+            messageEl.innerHTML = `
+            <span class="text-purple-400 font-semibold">${data.username}:</span>
+            <span class="ml-2 text-white">${data.message}</span>`;
+            messagesContainer.appendChild(messageEl);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+            // Show unread bubble if chat is closed
+            const isClosed = chatSidebar.classList.contains('translate-x-full');
+            if (isClosed) {
+            chatUnreadBubble.classList.remove('hidden');
+            }
+        });
+        }
+
+
 
 
     });
