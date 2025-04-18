@@ -12,22 +12,20 @@
       theme: {
         extend: {
           keyframes: {
-            sparkle: {
-              '0%, 100%': { opacity: 1 },
-              '50%': { opacity: 0.2 }
-            },
+            sparkle: { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.2 } },
             neonPulse: {
-              '0%, 100%': {
-                boxShadow: '0 0 16px #ffc0cb, 0 0 32px #ffe4e1, 0 0 48px #fff0f5'
-              },
-              '50%': {
-                boxShadow: '0 0 16px #ffc0cb, 0 0 32px #ffe4e1, 0 0 48px #fff0f5'
-              }
+              '0%, 100%': { boxShadow: '0 0 16px #ffc0cb, 0 0 32px #ffe4e1, 0 0 48px #fff0f5' },
+              '50%': { boxShadow: '0 0 16px #ffc0cb, 0 0 32px #ffe4e1, 0 0 48px #fff0f5' }
             },
+            scaleUp: {
+              '0%': { transform: 'scale(0.95)', opacity: 0 },
+              '100%': { transform: 'scale(1)', opacity: 1 }
+            }
           },
           animation: {
             sparkle: 'sparkle 2s ease-in-out infinite',
             neonPulse: 'neonPulse 2s ease-in-out infinite',
+            scaleUp: 'scaleUp 0.25s ease-out forwards'
           }
         }
       }
@@ -165,9 +163,14 @@
 
 
         <!-- Meme Lightbox Modal (Expand on click) -->
-        <div id="memeLightbox" class="fixed inset-0 bg-black/90 z-50 hidden justify-center items-center">
-        <img id="memeFullImage" src="" class="max-w-full max-h-full rounded-lg shadow-lg" />
+        <div id="memeLightbox"
+        class="fixed inset-0 z-[9999] bg-black/80 backdrop-blur-sm hidden justify-center items-center cursor-zoom-out transition-all duration-300">
+        <img id="memeFullImage"
+        src=""
+        alt="Full Meme"
+        class="max-w-full max-h-[90vh] rounded-xl shadow-2xl border-4 border-white animate-scaleUp" />
         </div>
+
 
 
 
@@ -1347,6 +1350,19 @@
                 };
             }
         }
+
+        // ✅ ADD THIS HERE (right after setupVotingEnhancements)
+        document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const lightbox = document.getElementById('memeLightbox');
+            const fullImage = document.getElementById('memeFullImage');
+            if (!lightbox.classList.contains('hidden')) {
+            lightbox.classList.add('hidden');
+            lightbox.classList.remove('flex');
+            fullImage.src = '';
+            }
+        }
+        });
 
 
 
