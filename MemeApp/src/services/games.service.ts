@@ -54,7 +54,9 @@ export interface Player {
     avatarUrl?: string;
     rerollsRemaining?: number;
     winning_message?: string;
-}
+    disconnectTimeout?: NodeJS.Timeout; // 👈 Add this line
+  }
+  
 
 
 export interface Game {
@@ -921,7 +923,7 @@ class GamesService {
         }
     }
 
-    private cleanupGame(gameId: string): void {
+    public cleanupGame(gameId: string): void {
         this.clearTimer(gameId);
 
         const game = this.getGameById(gameId);

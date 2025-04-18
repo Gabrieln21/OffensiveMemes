@@ -165,84 +165,91 @@ const startServer = async (): Promise<void> => {
             socket.on('join_game_room', (data: { gameId: string }, callback?: (response: any) => void) => {
                 console.log('Socket joining game room:', data.gameId);
                 socket.join(`game:${data.gameId}`);
-            
+              
                 const game = gamesService.getGameById(data.gameId);
-            
+              
                 if (game) {
-                    const player = game.players.find(p => p.userId === socket.data.userId);
-                    if (player) {
-                        player.socket = socket;
-                        player.connected = true;
-            
-                        const sessionUser = (socket.request as SessionIncomingMessage).session?.user;
-            
-                        if (!player.avatarUrl || player.avatarUrl === '/uploads/avatars/default-avatar.png') {
-                            if (sessionUser?.avatarUrl) {
-                                player.avatarUrl = sessionUser.avatarUrl;
-                            }
-                        }
-            
-                        // ✅ Ensure ALL players have their avatarUrl assigned from session
-                        game.players.forEach(p => {
-                            if (!player.avatarUrl || player.avatarUrl === '/uploads/avatars/default-avatar.png') {
-                                player.avatarUrl = sessionUser?.avatarUrl || '/uploads/avatars/default-avatar.png';
-                            }                 
-                        });
-
-                        if (!player.winning_message && sessionUser?.winning_message) {
-                            player.winning_message = sessionUser.winning_message;
-                        }
-                        
-                        // Also apply it to all players just like avatars (in case needed)
-                        game.players.forEach(p => {
-                            if (!p.winning_message && sessionUser?.winning_message) {
-                                p.winning_message = sessionUser.winning_message;
-                        
-                                const existingPlayer = game.players.find(existing => existing.id === p.id);
-                                if (existingPlayer) {
-                                    existingPlayer.winning_message = sessionUser.winning_message;
-                                }
-                            }
-                        });
-                        
-            
-                        // ✅ Emit playerId for frontend tracking
-                        socket.emit('player_info', {
-                            playerId: player.id,
-                            winning_message: player.winning_message || ''
-                          });
-            
-                        // ✅ Emit full updated state to the NEW player
-                        socket.emit('game_state', {
-                            currentRound: game.currentRound,
-                            totalRounds: game.totalRounds,
-                            round: game.round,
-                            memeTemplate: game.round?.memeTemplates[player.id],
-                            submissions: game.round?.submissions || [],
-                            players: game.players.map((p: Player) => ({
-                                id: p.id,
-                                username: p.username,
-                                score: p.score,
-                                connected: p.connected,
-                                hasSubmitted: p.hasSubmitted,
-                                hasVoted: p.hasVoted,
-                                votedOn: p.votedOn || [],
-                                avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                                winning_message: p.winning_message
-                            }))
-                        });
-            
-                        // ✅ Notify existing players about the new join
-                        io.to(`game:${data.gameId}`).emit('player_joined', {
-                            playerId: player.id,
-                            username: player.username,
-                            avatarUrl: player.avatarUrl,
-                        });
+                  const player = game.players.find(p => p.userId === socket.data.userId);
+                  if (player) {
+                    // ✅ Cancel disconnect timeout if reconnecting
+                    if (player.disconnectTimeout) {
+                      clearTimeout(player.disconnectTimeout);
+                      delete player.disconnectTimeout;
+                      console.log(`✅ ${player.username} reconnected in time`);
                     }
+              
+                    player.socket = socket;
+                    player.connected = true;
+              
+                    const sessionUser = (socket.request as SessionIncomingMessage).session?.user;
+              
+                    if (!player.avatarUrl || player.avatarUrl === '/uploads/avatars/default-avatar.png') {
+                      if (sessionUser?.avatarUrl) {
+                        player.avatarUrl = sessionUser.avatarUrl;
+                      }
+                    }
+              
+                    // ✅ Ensure ALL players have their avatarUrl assigned from session
+                    game.players.forEach(p => {
+                      if (!player.avatarUrl || player.avatarUrl === '/uploads/avatars/default-avatar.png') {
+                        player.avatarUrl = sessionUser?.avatarUrl || '/uploads/avatars/default-avatar.png';
+                      }                 
+                    });
+              
+                    if (!player.winning_message && sessionUser?.winning_message) {
+                      player.winning_message = sessionUser.winning_message;
+                    }
+              
+                    // Also apply it to all players just like avatars (in case needed)
+                    game.players.forEach(p => {
+                      if (!p.winning_message && sessionUser?.winning_message) {
+                        p.winning_message = sessionUser.winning_message;
+              
+                        const existingPlayer = game.players.find(existing => existing.id === p.id);
+                        if (existingPlayer) {
+                          existingPlayer.winning_message = sessionUser.winning_message;
+                        }
+                      }
+                    });
+              
+                    // ✅ Emit playerId for frontend tracking
+                    socket.emit('player_info', {
+                      playerId: player.id,
+                      winning_message: player.winning_message || ''
+                    });
+              
+                    // ✅ Emit full updated state to the NEW player
+                    socket.emit('game_state', {
+                      currentRound: game.currentRound,
+                      totalRounds: game.totalRounds,
+                      round: game.round,
+                      memeTemplate: game.round?.memeTemplates[player.id],
+                      submissions: game.round?.submissions || [],
+                      players: game.players.map((p: Player) => ({
+                        id: p.id,
+                        username: p.username,
+                        score: p.score,
+                        connected: p.connected,
+                        hasSubmitted: p.hasSubmitted,
+                        hasVoted: p.hasVoted,
+                        votedOn: p.votedOn || [],
+                        avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
+                        winning_message: p.winning_message
+                      }))
+                    });
+              
+                    // ✅ Notify existing players about the new join
+                    io.to(`game:${data.gameId}`).emit('player_joined', {
+                      playerId: player.id,
+                      username: player.username,
+                      avatarUrl: player.avatarUrl,
+                    });
+                  }
                 }
-            
+              
                 if (callback) callback({ success: true });
-            });
+              });
+              
             
             
             // Debug socket session
@@ -795,6 +802,157 @@ const startServer = async (): Promise<void> => {
                     callback({ success: false, error: error.message });
                 }
             });
+
+
+            socket.on('disconnect', () => {
+                console.log('🔌 User disconnected:', socket.id);
+              
+                const userId = socket.data.userId;
+                if (!userId) return;
+              
+                for (const game of gamesService.getAllGames()) {
+                  const player = game.players.find(p => p.userId === userId);
+                  if (player) {
+                    console.log(`⏳ Starting disconnect grace timer for ${player.username}`);
+              
+                    // Mark player as disconnected
+                    player.connected = false;
+                    gamesService.updateGame(game);
+              
+                    // Notify others
+                    io.to(`game:${game.id}`).emit('player_disconnected', {
+                      playerId: player.id,
+                      username: player.username,
+                    });
+              
+                    // Start timer
+                    const timeout = setTimeout(() => {
+                      console.log(`❌ Removing ${player.username} after grace period`);
+                      const index = game.players.findIndex(p => p.userId === userId);
+                      if (index !== -1) {
+                        game.players.splice(index, 1);
+              
+                        // If host left, reassign
+                        if (index === 0 && game.players.length > 0) {
+                          const newHost = game.players[0];
+                          io.to(`game:${game.id}`).emit('new_host', {
+                            playerId: newHost.id,
+                            username: newHost.username
+                          });
+                          console.log(`👑 New host assigned: ${newHost.username}`);
+                        }
+              
+                        io.to(`game:${game.id}`).emit('player_left', {
+                          playerId: player.id,
+                          username: player.username,
+                          players: game.players.map(p => ({
+                            id: p.id,
+                            username: p.username,
+                            connected: p.connected,
+                            score: p.score,
+                            avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png'
+                          }))
+                        });
+              
+                        if (game.players.length === 0) {
+                          gamesService.cleanupGame(game.id);
+                        } else {
+                          gamesService.updateGame(game);
+                          io.emit('games_update', gamesService.getAllGames().map(g => ({
+                            id: g.id,
+                            passcode: g.passcode,
+                            status: g.status,
+                            players: g.players.map(p => ({
+                              id: p.id,
+                              username: p.username,
+                              connected: p.connected,
+                              score: p.score
+                            }))
+                          })));
+                        }
+                      }
+                    }, 10000); // ⏱️ 10 seconds
+              
+                    // Save the timer so we can cancel it if they reconnect
+                    player.disconnectTimeout = timeout;
+                    break;
+                  }
+                }
+              });
+              
+
+
+            socket.on('leave_game', (data: { gameId: string }) => {
+                const { gameId } = data;
+                const userId = socket.data.userId;
+              
+                if (!gameId || !userId) {
+                  console.warn("⚠️ leave_game called with missing gameId or userId");
+                  return;
+                }
+              
+                const game = gamesService.getGameById(gameId);
+                if (!game) {
+                  console.warn(`❌ Game not found with ID: ${gameId}`);
+                  return;
+                }
+              
+                const playerIndex = game.players.findIndex(p => p.userId === userId);
+                if (playerIndex === -1) {
+                  console.warn(`⚠️ Player not found in game ${gameId}`);
+                  return;
+                }
+              
+                const player = game.players[playerIndex];
+                console.log(`👋 ${player.username} left game ${gameId}`);
+              
+                // ❌ Remove player
+                game.players.splice(playerIndex, 1);
+              
+                // 👑 If host (first player) left, assign new host
+                if (playerIndex === 0 && game.players.length > 0) {
+                  const newHost = game.players[0];
+                  io.to(`game:${gameId}`).emit('new_host', {
+                    playerId: newHost.id,
+                    username: newHost.username
+                  });
+                  console.log(`👑 New host assigned: ${newHost.username}`);
+                }
+              
+                // 📢 Notify others
+                io.to(`game:${gameId}`).emit('player_left', {
+                  playerId: player.id,
+                  username: player.username,
+                  players: game.players.map(p => ({
+                    id: p.id,
+                    username: p.username,
+                    connected: p.connected,
+                    score: p.score,
+                    avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png'
+                  }))
+                });
+              
+                // ✅ Update or cleanup game
+                if (game.players.length === 0) {
+                  gamesService.cleanupGame(gameId);
+                } else {
+                  gamesService.updateGame(game);
+                  io.emit('games_update', gamesService.getAllGames().map(g => ({
+                    id: g.id,
+                    passcode: g.passcode,
+                    status: g.status,
+                    players: g.players.map(p => ({
+                      id: p.id,
+                      username: p.username,
+                      connected: p.connected,
+                      score: p.score
+                    }))
+                  })));
+                }
+              });
+              
+              
+              
         }); // End of socket.io connection handler
 
         const availablePort = await findAvailablePort(Number(PORT));

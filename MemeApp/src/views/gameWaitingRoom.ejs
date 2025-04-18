@@ -88,6 +88,25 @@
         reconnectionAttempts: 5
     });
 
+    let myUserId = null;
+    let leftGame = null;
+    let isLeavingGame = false;
+
+
+    socket.on('player_info', (data) => {
+    myUserId = data.playerId;
+    });
+
+    // Listen for new host announcement
+    socket.on('new_host', (data) => {
+    console.log('👑 New host assigned:', data);
+
+    if (myUserId === data.playerId) {
+        document.getElementById('startGameContainer').style.display = 'block';
+    }
+    });
+
+
     const gameId = '<%- gameId %>';
     const isCreator = '<%- isCreator %>' === 'true';
 
@@ -212,6 +231,7 @@
         }
     });
 
+
     socket.on('game_started', (data) => {
         // Redirect to the game page
         window.location.href = `/games/play/${data.gameId}`;
@@ -219,6 +239,24 @@
 
     // Handle page unload
     window.addEventListener('beforeunload', () => {
+    if (isLeavingGame) {
+        console.log("🚪 Leaving game manually...");
+        socket.emit('leave_game', { gameId });
+    } else {
+        console.log("🚫 Not leaving manually, skipping leave_game emit");
+        // Do nothing — avoid false triggers when navigating to /games/play/:id
+    }
+    });
+
+    
+    
+
+    // Handle leave game via back button click
+    document.querySelector('.back-button').addEventListener('click', () => {
+        isLeavingGame = true;
         socket.emit('leave_game', { gameId });
     });
+
+
+
 </script>
