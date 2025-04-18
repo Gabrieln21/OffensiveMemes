@@ -741,7 +741,6 @@
                 console.log("🔄 Received NEW voting_submission", data);
                 console.log("🖼️ Meme image received:", data.submission.imageUrl);
 
-                console.log("✅ is this even firing?.");
                 const wrapper = document.getElementById('submittedMemeWrapper');
                 if (wrapper) {
                     wrapper.classList.add('hidden');
@@ -751,9 +750,7 @@
                 }
 
                 const memeModal = document.getElementById('memeCreationModal');
-                if (memeModal) {
-                    memeModal.classList.add('hidden');
-                }
+                if (memeModal) memeModal.classList.add('hidden');
 
                 hasVotedOnCurrentMeme = false;
                 clearVotingUI();
@@ -774,6 +771,9 @@
 
                 currentVotingSubmission = data.submission;
 
+                const imageUrl = data.submission.imageUrl || data.template.url;
+                setupVotingEnhancements(imageUrl); // ✅ Add this line
+
                 const isOwn = data?.submission?.playerId?.toString() === playerId?.toString();
                 console.log(`👤 Is own submission? ${isOwn} — Submission: ${data?.submission?.playerId}, You: ${playerId}`);
 
@@ -788,7 +788,6 @@
 
                         newStarBtn.onclick = () => {
                             console.log('⭐ Star button clicked!');
-
                             const imageUrl = currentVotingSubmission?.imageUrl;
                             const captions = currentVotingSubmission?.captions || [];
                             const templateUrl = currentVotingSubmission?.templateUrl || '';
@@ -829,11 +828,9 @@
                     const newBtn = btn.cloneNode(true);
                     btn.parentNode.replaceChild(newBtn, btn);
 
-                    // Always disable your own vote buttons
                     if (isOwn) {
                         newBtn.disabled = true;
                         newBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                        console.log(`🚫 ${id} button disabled (own meme)`, newBtn);
                     } else {
                         newBtn.disabled = false;
                         newBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -843,10 +840,8 @@
 
                             hasVotedOnCurrentMeme = true;
                             const voteType = voteMap[id];
-                            console.log(`🖱️ Vote button clicked (${voteType})`);
                             submitVote(voteType);
 
-                            // Lock all buttons after vote
                             Object.keys(voteMap).forEach(lockId => {
                                 const lockBtn = document.getElementById(lockId);
                                 if (!lockBtn) return;
@@ -855,8 +850,6 @@
                             });
                         });
                     }
-
-                    console.log(`✅ ${id} button ${isOwn ? 'disabled (own meme)' : 'ready'}`, newBtn);
                 });
 
                 const timerEl = document.getElementById('timeLeft');
@@ -874,8 +867,9 @@
 
                 console.log("✅ Voting UI displayed for new submission");
             });
+
             
-            
+
         });
 
 
