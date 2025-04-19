@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(255) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    avatar_url VARCHAR(255), -- ✅ Add this line
+    avatar_url VARCHAR(255), -- ✅ Optional user avatar
     last_login TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS starred_memes (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id),
     image_url TEXT NOT NULL,
+    game_id TEXT, -- ✅ Used for cleaning up unstarred memes per game
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, image_url)
 );

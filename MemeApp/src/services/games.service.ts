@@ -252,7 +252,8 @@ class GamesService {
         let imageUrl = '';
         try {
             const playerTemplate = game.round.memeTemplates[player.id];
-            imageUrl = await generateMemeImage(playerTemplate.url, captions);
+            imageUrl = await generateMemeImage(gameId, playerTemplate.url, captions);
+
             
         } catch (err) {
           console.error('🛑 Failed to generate meme image:', err);
@@ -443,8 +444,7 @@ class GamesService {
     
     startNewRound(gameId: string, io: Server): void {
         const game = this.getGameById(gameId);
-        (game as any).resultsEmitted = false;
-        if (!game) throw new Error('Game not found');
+        if (!game) throw new Error('Game not found'); // ✅ check first
     
         game.currentRound++;
         (game as any).resultsEmitted = false;

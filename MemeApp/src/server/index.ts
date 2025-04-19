@@ -515,11 +515,12 @@ const startServer = async (): Promise<void> => {
                 // ✅ Save to DB
                 try {
                     await pool.query(
-                        `INSERT INTO starred_memes (user_id, image_url) 
-                         VALUES ($1, $2) 
+                        `INSERT INTO starred_memes (user_id, image_url, game_id) 
+                         VALUES ($1, $2, $3) 
                          ON CONFLICT (user_id, image_url) DO NOTHING`,
-                        [userId, imageUrl]
-                    );
+                        [userId, imageUrl, gameId]
+                      );
+                      
                     console.log(`🗃️ Saved starred meme to DB for user ${userId}`);
                 } catch (err) {
                     console.error('❌ Error saving starred meme to DB:', err);

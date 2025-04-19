@@ -14,8 +14,12 @@ export interface Caption {
   width?: string; // in px
 }
 
-export async function generateMemeImage(templateUrl: string, captions: Caption[]): Promise<string> {
-  const normalizedPath = templateUrl.replace(/^\/+/,'');
+export async function generateMemeImage(
+  gameId: string,
+  templateUrl: string,
+  captions: Caption[]
+): Promise<string> {
+  const normalizedPath = templateUrl.replace(/^\/+/, '');
   const fullPath = path.join(process.cwd(), 'src', 'public', normalizedPath);
   console.log('🧭 Loading template from:', fullPath);
 
@@ -63,7 +67,7 @@ export async function generateMemeImage(templateUrl: string, captions: Caption[]
     }
   });
 
-  const filename = `meme-${uuidv4()}.png`;
+  const filename = `meme-${gameId}-${uuidv4()}.png`; // ✅ Now safe
   const relativePath = `/generated/${filename}`;
   const outputDir = path.resolve('src/public/generated');
   const outPath = path.resolve(outputDir, filename);
@@ -87,3 +91,4 @@ export async function generateMemeImage(templateUrl: string, captions: Caption[]
     });
   });
 }
+

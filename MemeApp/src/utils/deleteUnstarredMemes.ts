@@ -16,13 +16,17 @@ export async function deleteUnstarredMemes(gameId: string) {
     const files = fs.readdirSync(generatedDir);
 
     for (const file of files) {
-      const relPath = `/generated/${file}`; // Ensure leading slash!
-      if (!starredSet.has(relPath)) {
-        const fullPath = path.join(generatedDir, file);
-        fs.unlinkSync(fullPath);
-        console.log(`🧹 Deleted unstarred meme: ${relPath}`);
+        // Only delete memes generated during this game
+        if (!file.startsWith(`meme-${gameId}-`)) continue;
+      
+        const relPath = `/generated/${file}`;
+        if (!starredSet.has(relPath)) {
+          const fullPath = path.join(generatedDir, file);
+          fs.unlinkSync(fullPath);
+          console.log(`🧹 Deleted unstarred meme: ${relPath}`);
+        }
       }
-    }
+      
 
     console.log(`🧼 Deleted unstarred memes for game ${gameId}`);
   } catch (err) {

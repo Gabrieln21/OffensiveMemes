@@ -1406,7 +1406,14 @@
                 img.src = result.imageUrl || result.templateUrl;
                 img.className = 'absolute top-0 left-0 w-full h-full object-contain rounded-lg z-0';
                 img.style.cursor = 'pointer';
-                img.onclick = () => window.open(img.src, '_blank');
+                img.onclick = () => {
+                    const lightbox = document.getElementById('memeLightbox');
+                    const fullImage = document.getElementById('memeFullImage');
+                    fullImage.src = result.templateUrl || result.imageUrl;
+                    lightbox.classList.remove('hidden');
+                    lightbox.classList.add('flex');
+                };
+
                 memeWrapper.appendChild(img);
 
                 card.appendChild(memeWrapper);
