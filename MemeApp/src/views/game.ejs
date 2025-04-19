@@ -868,7 +868,7 @@
                 const bar = document.getElementById('timerBar');
                 const container = document.getElementById('timerBarContainer');
 
-                const timeLeft = data.timeLeft || 15;
+                const timeLeft = parseInt(data.timeLeft) || 15;
                 if (timerEl && bar && container) {
                     timerEl.textContent = `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`;
                     bar.style.width = '100%';

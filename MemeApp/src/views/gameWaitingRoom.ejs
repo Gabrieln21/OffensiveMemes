@@ -63,6 +63,43 @@
 
                 <!-- Start Game Button (visible only to creator) -->
                 <div class="mt-8 text-center" id="startGameContainer" style="display: none;">
+                    <!-- Advanced Settings Toggle -->
+                    <div class="text-center mb-4">
+                        <button id="toggleSettingsBtn"
+                        class="bg-purple-700 hover:bg-purple-800 text-white font-semibold px-6 py-2 rounded-full transition-all duration-300">
+                        ⚙️ Show Advanced Settings
+                        </button>
+                    </div>
+                    
+                    <!-- Game Settings Panel -->
+                    <div id="gameSettings" class="hidden transition-all duration-300 ease-in-out bg-purple-900/60 rounded-2xl p-6 shadow-[0_0_20px_rgba(192,132,252,0.2)] border border-purple-500/30 backdrop-blur-md mb-8">
+                        <h3 class="text-2xl font-bold text-center mb-6 bg-gradient-to-r from-pink-400 via-purple-300 to-pink-400 bg-clip-text text-transparent">
+                        Game Settings
+                        </h3>
+                    
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                        <!-- Total Rounds -->
+                        <div class="flex flex-col">
+                            <label for="totalRoundsInput" class="text-sm mb-1 text-purple-200 font-semibold tracking-wide">Total Rounds</label>
+                            <input id="totalRoundsInput" type="number" min="1" max="10" value="5"
+                            class="bg-purple-800/70 border border-purple-400/40 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-pink-400 shadow-inner" />
+                        </div>
+                    
+                        <!-- Submission Time -->
+                        <div class="flex flex-col">
+                            <label for="roundTimeInput" class="text-sm mb-1 text-purple-200 font-semibold tracking-wide">Submission Time (s)</label>
+                            <input id="roundTimeInput" type="number" min="30" max="180" value="90"
+                            class="bg-purple-800/70 border border-purple-400/40 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-pink-400 shadow-inner" />
+                        </div>
+                    
+                        <!-- Voting Time -->
+                        <div class="flex flex-col">
+                            <label for="votingTimeInput" class="text-sm mb-1 text-purple-200 font-semibold tracking-wide">Voting Time (s)</label>
+                            <input id="votingTimeInput" type="number" min="10" max="60" value="15"
+                            class="bg-purple-800/70 border border-purple-400/40 text-white rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-pink-400 shadow-inner" />
+                        </div>
+                        </div>
+                    </div>
                     <button onclick="startGame()"
                             class="bg-gradient-to-r from-red-500 to-red-700 text-white font-bold py-3 px-8 rounded-xl
                                    transform transition-all duration-300 hover:scale-105 hover:shadow-lg
@@ -198,13 +235,18 @@
 
 
     function startGame() {
-        socket.emit('start_game', { gameId }, (response) => {
+        const totalRounds = parseInt(document.getElementById('totalRoundsInput')?.value) || 1;
+        const roundTime = parseInt(document.getElementById('roundTimeInput')?.value) || 90;
+        const votingTime = parseInt(document.getElementById('votingTimeInput')?.value) || 15;
+
+        socket.emit('start_game', { gameId, totalRounds, roundTime, votingTime }, (response) => {
             if (response.error) {
                 alert(response.error);
             }
-            // Game started successfully - will be redirected by game_started event
         });
     }
+
+
 
     socket.on('game_state', (state) => {
         console.log("📦 Waiting room received full game_state:", state);
@@ -259,6 +301,16 @@
         socket.emit('leave_game', { gameId });
     });
 
+    const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+    const gameSettings = document.getElementById('gameSettings');
+
+    if (toggleSettingsBtn && gameSettings) {
+    toggleSettingsBtn.addEventListener('click', () => {
+        const isHidden = gameSettings.classList.contains('hidden');
+        gameSettings.classList.toggle('hidden', !isHidden);
+        toggleSettingsBtn.textContent = isHidden ? '❌ Hide Advanced Settings' : '⚙️ Show Advanced Settings';
+    });
+    }
 
 
 </script>

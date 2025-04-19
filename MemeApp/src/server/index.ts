@@ -711,35 +711,37 @@ const startServer = async (): Promise<void> => {
             
             
             // Handle starting the game
-            socket.on('start_game', (data: { gameId: string }, callback: (response: any) => void) => {
+            socket.on('start_game', (data: { gameId: string, totalRounds?: number, roundTime?: number, votingTime?: number }, callback: (arg0: { success: boolean; error?: any; }) => void) => {
                 try {
                     const game = gamesService.getGameById(data.gameId);
                     if (!game) {
                         return callback({ success: false, error: 'Game not found' });
                     }
-
+            
                     // Verify the user is the game creator
                     if (game.players[0].userId !== socket.data.userId) {
                         return callback({ success: false, error: 'Only the game creator can start the game' });
                     }
-
+            
                     // Ensure minimum number of players (2)
                     if (game.players.length < 2) {
                         return callback({ success: false, error: 'Need at least 2 players to start' });
                     }
-
-                    // Update game status and start first round
+            
+                    // ✅ Apply custom settings
+                    game.totalRounds = Math.max(1, Math.min(data.totalRounds || 1, 10));
+                    game.roundTime = Math.max(30, Math.min(data.roundTime || 90, 180));
+                    game.votingTime = Math.max(10, Math.min(data.votingTime || 15, 60));
                     game.status = 'playing';
+            
                     gamesService.startNewRound(game.id, io);
                     gamesService.updateGame(game);
-
-                    // Notify all players in the game room
+            
                     io.to(`game:${game.id}`).emit('game_started', {
                         gameId: game.id,
                         status: 'playing'
                     });
-
-                    // Send initial game state to all players
+            
                     game.players.forEach(player => {
                         const playerSocket = player.socket;
                         if (playerSocket) {
@@ -761,22 +763,23 @@ const startServer = async (): Promise<void> => {
                                     winning_message: p.winning_message
                                 })),
                                 ...(game.round?.status === 'results' && {
-                                  results: game.round?.submissions.map(s => ({
-                                    username: s.username,
-                                    memeUrl: game.round?.memeTemplates.url, // or generate unique meme images if you support that
-                                    votes: s.votes.length
-                                  }))
+                                    results: game.round?.submissions.map(s => ({
+                                        username: s.username,
+                                        memeUrl: game.round?.memeTemplates.url,
+                                        votes: s.votes.length
+                                    }))
                                 })
-                              });                            
+                            });
                         }
                     });
-
+            
                     callback({ success: true });
                 } catch (error: any) {
                     console.error('Error starting game:', error);
                     callback({ success: false, error: error.message });
                 }
             });
+            
 
             // Handle rematch requests
             socket.on('request_rematch', (data: { gameId: string }, callback: (response: any) => void) => {

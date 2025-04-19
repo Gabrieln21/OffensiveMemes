@@ -6,6 +6,7 @@ import { ScoringSystem } from '../game/scoring';
 import { pool } from '../config/database';
 import { generateMemeImage } from '../utils/generateMemeImage';
 import { io } from "socket.io-client";
+import { deleteUnstarredMemes } from '../utils/deleteUnstarredMemes';
 
 export interface MemeSubmission {
     playerId: string;
@@ -544,9 +545,10 @@ class GamesService {
         }
     
         const current = game.round.submissions[game.votingIndex];
-        console.log(`⬆️ Emitting voting_submission for index ${game.votingIndex}:`, current.imageUrl);
 
-        game.round.timeLeft = 15;
+        console.log(`⬆️ Emitting voting_submission for index ${game.votingIndex}:`, current.imageUrl);
+        game.round.timeLeft = game.votingTime; // ✅ FIXED: use configured time
+
 
         // ✅ Send immediate timer update to reset frontend timer bar
         game.players.forEach((player) => {
@@ -929,6 +931,11 @@ class GamesService {
         const game = this.getGameById(gameId);
         if (!game) return;
 
+        // 🧼 Delete unstarred memes
+        deleteUnstarredMemes(gameId).catch(err => {
+            console.error(`❌ Error cleaning up memes for ${gameId}:`, err);
+        });
+
         // Notify all players the game is ending
         game.players.forEach((player) => {
             player.socket.emit('game_cleanup', {
@@ -943,6 +950,7 @@ class GamesService {
             this.games.delete(game.passcode);
         }
     }
+
 
     rerollTemplate(gameId: string, playerId: string): {
         success: boolean;
