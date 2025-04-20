@@ -389,6 +389,17 @@
           white-space: pre-wrap;
           z-index: 2;
         }
+
+        #submittedMemeImg {
+            max-width: 100%;
+            max-height: 500px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            aspect-ratio: 16/9; /* 👈 force consistency */
+        }
+
+
         #timerBar {
             transition: width linear;
         }
@@ -1443,7 +1454,7 @@
                 img.onclick = () => {
                     const lightbox = document.getElementById('memeLightbox');
                     const fullImage = document.getElementById('memeFullImage');
-                    fullImage.src = result.templateUrl || result.imageUrl;
+                    fullImage.src = result.imageUrl || result.templateUrl;
                     lightbox.classList.remove('hidden');
                     lightbox.classList.add('flex');
                 };
