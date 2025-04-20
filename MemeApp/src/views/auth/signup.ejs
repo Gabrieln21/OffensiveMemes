@@ -76,35 +76,5 @@
       Already have an account? <a href="/auth/login" class="text-purple-400 hover:underline">Login here</a>
     </div>
   </div>
-
-  <!-- Particles Script -->
-  <script>
-    function createParticle() {
-      const container = document.getElementById('particles');
-      const particle = document.createElement('div');
-      particle.className = 'absolute w-16 h-24 opacity-10 bg-purple-600 rounded-lg blur-xl';
-      particle.style.left = `${Math.random() * 100}%`;
-      particle.style.top = '120vh';
-      const duration = 10000 + Math.random() * 10000;
-
-      particle.animate([
-        { transform: 'translateY(0)' },
-        { transform: 'translateY(-150vh)' }
-      ], {
-        duration,
-        easing: 'linear',
-        iterations: 1
-      }).onfinish = () => {
-        particle.remove();
-        createParticle();
-      };
-
-      container.appendChild(particle);
-    }
-
-    for (let i = 0; i < 20; i++) {
-      setTimeout(createParticle, i * 400);
-    }
-  </script>
 </body>
 </html>
