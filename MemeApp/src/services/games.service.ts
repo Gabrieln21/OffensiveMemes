@@ -274,24 +274,25 @@ class GamesService {
       
         // 🧠 All players submitted — begin voting phase
         if (!suppressVotingStart && game.players.every(p => p.hasSubmitted)) {
-          game.round.status = 'voting';
-          game.round.timeLeft = game.votingTime;
-          game.votingIndex = -1;
-      
-          // ✅ Pre-mark each player's own submission so they never vote on it
-          game.players.forEach(player => {
-            if (!player.votedOn) player.votedOn = [];
-      
-            const ownSubmission = game.round?.submissions.find(sub => sub.playerId === player.id);
-            if (ownSubmission && !player.votedOn.includes(ownSubmission.playerId)) {
-              player.votedOn.push(ownSubmission.playerId);
-              console.log(`🤖 Pre-marked own submission ${ownSubmission.playerId} for player ${player.username}`);
-            }
-          });
-      
-          // 🚀 Begin shared voting loop
-          this.advanceVoting(game, io);
+            game.round.status = 'voting';
+            game.round.timeLeft = game.votingTime;
+            game.votingIndex = -1;
+          
+            game.players.forEach(player => {
+              if (!player.votedOn) player.votedOn = [];
+          
+              const ownSubmission = game.round?.submissions.find(sub => sub.playerId === player.id);
+              if (ownSubmission && !player.votedOn.includes(ownSubmission.playerId)) {
+                player.votedOn.push(ownSubmission.playerId);
+              }
+            });
+          
+            // 🧠 Let clients breathe before forcing voting UI
+            setTimeout(() => {
+              this.advanceVoting(game, io);
+            }, 5); // 300ms delay
         }
+          
       
         return { success: true, game, imageUrl };
       }

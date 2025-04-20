@@ -752,14 +752,25 @@
                 console.log("🔄 FULL voting_submission payload:", JSON.stringify(data, null, 2));
                 console.log("🔄 Received NEW voting_submission", data);
                 console.log("🖼️ Meme image received:", data.submission.imageUrl);
+                
 
                 const wrapper = document.getElementById('submittedMemeWrapper');
+                const display = document.getElementById('submittedMemeDisplay');
                 if (wrapper) {
                     wrapper.classList.add('hidden');
-                    console.log("✅ submittedMemeWrapper hidden.");
-                } else {
-                    console.warn("⚠️ submittedMemeWrapper not found.");
                 }
+                if (display) {
+                    display.classList.add('hidden');
+                }
+                console.log("✅ Hidden submitted meme during voting.");
+
+
+                const preview = document.getElementById('submittedMemeDisplay');
+                if (preview) {
+                    preview.classList.add('hidden');
+                    console.log("✅ submittedMemeDisplay hidden.");
+                }
+
 
                 const memeModal = document.getElementById('memeCreationModal');
                 if (memeModal) memeModal.classList.add('hidden');
@@ -878,6 +889,7 @@
                 }
 
                 console.log("✅ Voting UI displayed for new submission");
+                
             });
 
             
@@ -1013,9 +1025,12 @@
                 }
             } else if (phase === 'voting') {
                 document.getElementById('votingPhase')?.classList.remove('hidden');
+
             } else if (phase === 'results') {
                 document.getElementById('resultsPhase')?.classList.remove('hidden');
+
             }
+
 
             updateGameState(state);
         });
@@ -1129,6 +1144,11 @@
 
 
         function setupSubmissionPhase(template) {
+            const submittedMemeImg = document.getElementById('submittedMemeImg');
+            const submittedMemeDisplay = document.getElementById('submittedMemeDisplay');
+            if (submittedMemeImg) submittedMemeImg.src = '';
+            if (submittedMemeDisplay) submittedMemeDisplay.classList.add('hidden');
+
             if (!template || !template.url) {
                 console.error("🚨 No meme template provided.");
                 return;
@@ -1224,8 +1244,15 @@
                         const submittedMemeDisplay = document.getElementById('submittedMemeDisplay');
                         if (submittedMemeImg && submittedMemeDisplay && response.imageUrl) {
                             submittedMemeImg.src = response.imageUrl;
+
+                            // 🔁 Ensure display wrapper is shown again on later rounds
+                            const wrapper = document.getElementById('submittedMemeWrapper');
+                            if (wrapper) wrapper.classList.remove('hidden');
+
                             submittedMemeDisplay.classList.remove('hidden');
+                            console.log("📸 Displaying submitted meme for this round:", response.imageUrl);
                         }
+
                     }
                 });
             };
