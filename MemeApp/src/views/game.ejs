@@ -390,8 +390,9 @@
           z-index: 2;
         }
         #timerBar {
-            transition: width 0.s ease-in-out;
+            transition: width linear;
         }
+
         #chatSidebar {
             z-index: 9999;
             box-shadow: -4px 0 20px rgba(128, 90, 213, 0.3);
@@ -640,7 +641,8 @@
         let votingCountdownInterval;
         let maxVotingTime = 15;
         let hasVotedOnCurrentMeme = false;
-
+        let lastAnimatedPhase = null;
+        let lastAnimatedVotingSubmissionId = null;
 
         const gameId = window.location.pathname.split('/').pop();
         let currentPhase = null;
@@ -875,12 +877,15 @@
                     }
                 });
 
-                const timerEl = document.getElementById('timeLeft');updateTimer
-                const bar = document.getElementById('timerBar');
+                const timerEl = document.getElementById('timeLeft');
                 const container = document.getElementById('timerBarContainer');
 
                 const timeLeft = parseInt(data.timeLeft) || 15;
                 window.maxVotingTime = timeLeft; // 💡 Track it globally
+                requestAnimationFrame(() => {
+                    startTimerBarAnimation('voting', timeLeft, data.submission?.id || Date.now());
+                });
+
 
                 if (timerEl && bar && container) {
                     timerEl.textContent = `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`;
@@ -893,9 +898,6 @@
                 console.log("✅ Voting UI displayed for new submission");
                 
             });
-
-            
-
         });
 
 
@@ -1025,18 +1027,20 @@
                 } else {
                     console.log("✋ Skipping meme editor re-init — already editing");
                 }
+
+                startTimerBarAnimation('submitting', state.timeLeft || 60);
             } else if (phase === 'voting') {
                 window.maxVotingTime = state.round?.timeLeft || 15;
                 document.getElementById('votingPhase')?.classList.remove('hidden');
-
             } else if (phase === 'results') {
                 document.getElementById('resultsPhase')?.classList.remove('hidden');
 
+                startTimerBarAnimation('results', 30); // Assuming results always lasts 30 seconds
             }
-
 
             updateGameState(state);
         });
+
 
 
 
@@ -1614,48 +1618,48 @@
                 `).join('');
         }
 
-
-        function updateTimer(seconds) {
-            const timer = document.getElementById('timeLeft');
+        function startTimerBarAnimation(phase, seconds, submissionId = null) {
             const bar = document.getElementById('timerBar');
-            const container = document.getElementById('timerBarContainer');
+            if (!bar) return;
 
-            if (!timer || !bar || !container) return;
-
-            const phase = currentPhase || 'submitting';
-
-            // Track the actual max time during voting phase
-            if (phase === 'voting' && (typeof window.maxVotingTime !== 'number' || isNaN(window.maxVotingTime) || seconds > window.maxVotingTime)) {
-                window.maxVotingTime = seconds;
+            if (phase === 'voting') {
+                // Skip if already animated this submission
+                if (lastAnimatedVotingSubmissionId === submissionId) return;
+                lastAnimatedVotingSubmissionId = submissionId;
             }
 
-            // Dynamically assign the max time per phase
-            const maxTime =
-                phase === 'voting' ? (window.maxVotingTime || 15) :
-                phase === 'results' ? 30 :
-                60;
-
-            // Clamp % and update UI
-            const percent = Math.max(0, Math.min(100, (seconds / maxTime) * 100));
-            bar.style.width = `${percent}%`;
-
-            // Display MM:SS
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            timer.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-
-            // Optional urgency color
-            if (percent <= 20) {
-                bar.classList.remove('bg-purple-500');
-                bar.classList.add('bg-red-500');
-            } else {
-                bar.classList.remove('bg-red-500');
-                bar.classList.add('bg-purple-500');
-            }
+            bar.style.transition = 'none';
+            bar.style.width = '100%';
+            void bar.offsetWidth; // force reflow
+            bar.style.transition = `width ${seconds}s linear`;
+            bar.style.width = '0%';
         }
 
 
 
+        function updateTimer(seconds) {
+            const timer = document.getElementById('timeLeft');
+            const bar = document.getElementById('timerBar');
+
+            if (!timer || !bar) return;
+
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            timer.textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+            const phase = currentPhase || 'submitting';
+            const maxTime =
+                phase === 'voting' ? (window.maxVotingTime || seconds) :
+                phase === 'results' ? 30 :
+                60;
+
+            const percent = Math.max(0, Math.min(100, (seconds / maxTime) * 100));
+
+            // ❌ bar.style.width = `${percent}%`; ← REMOVE THIS
+
+            bar.classList.toggle('bg-red-500', percent <= 20);
+            bar.classList.toggle('bg-purple-500', percent > 20);
+        }
 
 
 
