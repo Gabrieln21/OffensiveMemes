@@ -875,11 +875,13 @@
                     }
                 });
 
-                const timerEl = document.getElementById('timeLeft');
+                const timerEl = document.getElementById('timeLeft');updateTimer
                 const bar = document.getElementById('timerBar');
                 const container = document.getElementById('timerBarContainer');
 
                 const timeLeft = parseInt(data.timeLeft) || 15;
+                window.maxVotingTime = timeLeft; // 💡 Track it globally
+
                 if (timerEl && bar && container) {
                     timerEl.textContent = `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`;
                     bar.style.width = '100%';
@@ -1024,6 +1026,7 @@
                     console.log("✋ Skipping meme editor re-init — already editing");
                 }
             } else if (phase === 'voting') {
+                window.maxVotingTime = state.round?.timeLeft || 15;
                 document.getElementById('votingPhase')?.classList.remove('hidden');
 
             } else if (phase === 'results') {
@@ -1621,14 +1624,14 @@
 
             const phase = currentPhase || 'submitting';
 
-            // Use actual maxTime based on first seconds seen in the voting phase
-            if (phase === 'voting' && (typeof maxVotingTime !== 'number' || isNaN(maxVotingTime) || seconds > maxVotingTime)) {
-                maxVotingTime = seconds;
+            // Track the actual max time during voting phase
+            if (phase === 'voting' && (typeof window.maxVotingTime !== 'number' || isNaN(window.maxVotingTime) || seconds > window.maxVotingTime)) {
+                window.maxVotingTime = seconds;
             }
 
-            // Fallbacks
+            // Dynamically assign the max time per phase
             const maxTime =
-                phase === 'voting' ? maxVotingTime :
+                phase === 'voting' ? (window.maxVotingTime || 15) :
                 phase === 'results' ? 30 :
                 60;
 
@@ -1650,6 +1653,7 @@
                 bar.classList.add('bg-purple-500');
             }
         }
+
 
 
 
