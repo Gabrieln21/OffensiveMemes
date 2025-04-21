@@ -1051,6 +1051,44 @@ const startServer = async (): Promise<void> => {
                     results: game.lastRoundResults
                 });
             });
+
+            socket.on('reaction', (
+                data: {
+                  gameId: string;
+                  submissionPlayerId: string;
+                  emoji: string;
+                },
+                callback?: (res: { success: boolean }) => void
+              ) => {
+                const game = gamesService.getGameById(data.gameId);
+                if (!game) return;
+              
+                const player = game.players.find(p => p.userId === socket.data.userId);
+                if (!player) return;
+              
+                const submission = game.round?.submissions?.find(s => s.playerId === data.submissionPlayerId);
+                if (!submission) return;
+              
+                if (!submission.reactions) submission.reactions = [];
+              
+                submission.reactions.push({
+                  emoji: data.emoji,
+                  from: player.username,
+                  timestamp: Date.now()
+                });
+              
+                io.to(`game:${data.gameId}`).emit('reaction_update', {
+                  emoji: data.emoji,
+                  from: player.username,
+                  timestamp: Date.now()
+                });
+              
+                if (callback) callback({ success: true });
+            });
+              
+              
+              
+              
             
             
               

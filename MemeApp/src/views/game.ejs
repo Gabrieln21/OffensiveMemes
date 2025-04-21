@@ -9,6 +9,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
+      safelist: ['emoji-btn'],
       theme: {
         extend: {
           keyframes: {
@@ -33,20 +34,17 @@
   </script>
   <script src="/socket.io/socket.io.js"></script>
 </head>
-<body class="bg-gradient-to-br from-purple-800 via-fuchsia-900 to-black min-h-screen text-white">
     
-<!-- Floating Phase Message -->
-<!-- Top-left Phase Message under title -->
-<div id="phaseMessage" class="absolute top-20 left-6 z-40 hidden">
-    <div class="from-purple-800 via-fuchsia-900 to-black text-white px-6 py-3 rounded-xl text-3xl font-extrabold shadow-lg border-2 border-purple-400 animate-pulse" style="font-family: 'Impact', 'Arial Black', sans-serif;">
-      Time’s up! ⌛
-    </div>
-  </div>
-  
-  
-  
   
 <body class="bg-gradient-to-br from-purple-900 via-gray-900 to-black min-h-screen text-white">
+    <!-- Floating Phase Message -->
+    <!-- Top-left Phase Message under title -->
+    <div id="phaseMessage" class="absolute top-20 left-6 z-40 hidden">
+        <div class="from-purple-800 via-fuchsia-900 to-black text-white px-6 py-3 rounded-xl text-3xl font-extrabold shadow-lg border-2 border-purple-400 animate-pulse" style="font-family: 'Impact', 'Arial Black', sans-serif;">
+        Time’s up! ⌛
+        </div>
+    </div>
+
     <!-- Game Header -->
     <header class="p-4 flex flex-col gap-2 bg-black/30">
         <div class="flex justify-between w-full items-center">
@@ -119,7 +117,7 @@
                         <img id="votingMemeTemplate"
                             src=""
                             alt="Meme"
-                            class="absolute top-0 left-0 w-full h-full rounded-lg object-contain z-10">
+                            class="absolute top-0 left-0 w-full h-full rounded-lg object-contain z-0">
 
                         <!-- Download Button -->
                         <a id="downloadMemeBtn"
@@ -137,14 +135,13 @@
                             class="absolute bottom-2 right-2 z-10 hidden text-2xl hover:opacity-80">
                             ⭐
                         </button>
-
-
+                        
                     </div>
                 </div>
 
 
                 <!-- Voting Buttons -->
-                <div class="flex justify-center gap-4">
+                <div class="flex justify-center gap-4 mb-4">
                     <button id="voteYes"
                         class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105">
                         👍 Like
@@ -158,6 +155,21 @@
                         👎 Pass
                     </button>
                 </div>
+                
+                <!-- Emoji Reactions Bar -->
+                <div id="emojiReactionsBar" class="flex justify-center gap-3 mt-4 text-2xl z-30 relative pointer-events-auto">
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="😂">😂</button>
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="❤️">❤️</button>
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="🔥">🔥</button>
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="🍑">🍑</button>
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="🍆">🍆</button>
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="🤢">🤢</button>
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="👎">👎</button>
+                    <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="🖕">🖕</button>
+                </div>
+                 
+               
+  
             </div>
         </div>
 
@@ -423,6 +435,26 @@
           z-index: 10;
           /* transform: translate(-50%, -50%); */
         }
+
+        .emoji-btn {
+            z-index: 50 !important;
+            pointer-events: auto !important;
+            position: relative; /* required for z-index to take effect */
+        }
+
+        .emoji-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+
+        #emojiReactionsBar {
+            pointer-events: auto !important;
+            z-index: 9999 !important;
+        }
+
+
+
       
         #memeTextOverlays div {
           resize: both;
@@ -624,13 +656,6 @@
             };
         }
     }
-
-
-
-
-
-
-
     </script>
 
     <!-- Main Game Logic -->
@@ -638,9 +663,8 @@
     document.addEventListener('DOMContentLoaded', () => {
         const socket = io();
         window.socket = socket;
-        socket.onAny((event, ...args) => {
-            console.log(`📡 Received event: ${event}`, args);
-        });
+
+    
         let allSubmissions = [];
         let currentVoteIndex = 0;
         let votingTemplate = null;
@@ -659,6 +683,31 @@
         let currentPhase = null;
         let playerId = null;
 
+        function sendReaction(emoji) {
+            if (!window.socket) {
+                console.error("❌ No socket connection found when sending emoji!");
+                return;
+            }
+            console.log("🧠 currentVotingSubmission at reaction:", window.currentVotingSubmission);
+
+            const sub = window.currentVotingSubmission;
+            if (!sub || !sub.playerId) {
+                console.warn("⚠️ No currentVotingSubmission — skipping reaction.");
+                return;
+            }
+            console.log("📡 Sending emoji reaction:", emoji);
+            console.log("🧪 Is socket defined?", !!window.socket);
+
+            window.socket.emit('reaction', {
+                gameId,
+                submissionPlayerId: String(sub.playerId),
+                emoji
+            }, (res) => {
+                console.log("✅ Reaction ack:", res);
+            });
+        }
+
+        
         submitVote = function submitVote(voteType) {
             if (!currentVotingSubmission || !currentVotingSubmission.playerId) {
                 console.warn("🚫 No valid submission to vote on.");
@@ -767,25 +816,11 @@
                 console.log("🔄 FULL voting_submission payload:", JSON.stringify(data, null, 2));
                 console.log("🔄 Received NEW voting_submission", data);
                 console.log("🖼️ Meme image received:", data.submission.imageUrl);
-                
 
                 const wrapper = document.getElementById('submittedMemeWrapper');
                 const display = document.getElementById('submittedMemeDisplay');
-                if (wrapper) {
-                    wrapper.classList.add('hidden');
-                }
-                if (display) {
-                    display.classList.add('hidden');
-                }
-                console.log("✅ Hidden submitted meme during voting.");
-
-
-                const preview = document.getElementById('submittedMemeDisplay');
-                if (preview) {
-                    preview.classList.add('hidden');
-                    console.log("✅ submittedMemeDisplay hidden.");
-                }
-
+                if (wrapper) wrapper.classList.add('hidden');
+                if (display) display.classList.add('hidden');
 
                 const memeModal = document.getElementById('memeCreationModal');
                 if (memeModal) memeModal.classList.add('hidden');
@@ -807,10 +842,11 @@
                 const votingPhase = document.getElementById('votingPhase');
                 if (votingPhase) votingPhase.classList.remove('hidden');
 
-                currentVotingSubmission = data.submission;
+                window.currentVotingSubmission = data.submission;
+                console.log("💾 currentVotingSubmission set to:", currentVotingSubmission);
 
                 const imageUrl = data.submission.imageUrl || data.template.url;
-                setupVotingEnhancements(imageUrl); // ✅ Add this line
+                setupVotingEnhancements(imageUrl);
 
                 const isOwn = data?.submission?.playerId?.toString() === playerId?.toString();
                 console.log(`👤 Is own submission? ${isOwn} — Submission: ${data?.submission?.playerId}, You: ${playerId}`);
@@ -894,12 +930,12 @@
                 const container = document.getElementById('timerBarContainer');
 
                 const timeLeft = parseInt(data.timeLeft) || 15;
-                window.maxVotingTime = timeLeft; // 💡 Track it globally
+                window.maxVotingTime = timeLeft;
                 requestAnimationFrame(() => {
                     startTimerBarAnimation('voting', timeLeft, data.submission?.id || Date.now());
                 });
 
-
+                const bar = document.getElementById('timerBar');
                 if (timerEl && bar && container) {
                     timerEl.textContent = `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`;
                     bar.style.width = '100%';
@@ -909,9 +945,61 @@
                 }
 
                 console.log("✅ Voting UI displayed for new submission");
-                
+
+                // ✅ Set up emoji click listener ONCE after votingPhase is shown
+                requestAnimationFrame(() => {
+                    const emojiButtons = document.querySelectorAll('#emojiReactionsBar .emoji-btn');
+                    emojiButtons.forEach((btn) => {
+                        const cloned = btn.cloneNode(true); // Avoid duplicate listeners
+                        btn.parentNode.replaceChild(cloned, btn);
+
+                        if (isOwn) {
+                            cloned.disabled = true;
+                            cloned.classList.add('opacity-50', 'cursor-not-allowed');
+                        } else {
+                            cloned.disabled = false;
+                            cloned.classList.remove('opacity-50', 'cursor-not-allowed');
+
+                            cloned.addEventListener('click', () => {
+                                const emoji = cloned.getAttribute('data-emoji');
+                                console.log("🎯 Emoji button clicked:", emoji);
+                                sendReaction(emoji);
+                            });
+                        }
+                    });
+                });
+
+
+
             });
+
         });
+
+
+
+        socket.on('reaction_update', (data) => {
+            console.log("🔥 Reaction received:", data);
+            const display = document.getElementById('currentMemeDisplay');
+            if (!display) return;
+
+            const rect = display.getBoundingClientRect();
+            console.log("👀 Meme display size:", rect.width, rect.height);
+
+            // Make sure it's visible
+            display.classList.remove('hidden');
+            display.style.display = 'block';
+
+            const emoji = document.createElement('div');
+            emoji.innerText = data.emoji;
+            emoji.className = 'absolute text-4xl animate-bounce pointer-events-none z-50';
+            emoji.style.top = `${Math.random() * 60 + 20}%`;
+            emoji.style.left = `${Math.random() * 60 + 20}%`;
+
+            display.appendChild(emoji);
+            setTimeout(() => emoji.remove(), 2000);
+        });
+
+
 
 
         socket.on('time_update', ({ timeLeft, phase }) => {
@@ -1750,6 +1838,7 @@
 
 
 
+        window.sendReaction = sendReaction;
 
     });
     </script>

@@ -25,6 +25,11 @@ export interface MemeSubmission {
       name: string;
       points: number;
     }[]; // 👈 add this line
+    reactions?: {
+        from: string;
+        emoji: string;
+        timestamp: number;
+      }[];      
   }
   
 export interface MemeTemplate {
@@ -37,7 +42,7 @@ export interface Round {
     memeTemplates: Record<string, MemeTemplate>; // ✅ per-player templates
     submissions: MemeSubmission[];
     status: 'submitting' | 'voting' | 'results';
-    timeLeft: number;
+    timeLeft: number;  
 }
 
 export interface Player {
