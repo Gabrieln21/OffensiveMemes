@@ -749,6 +749,8 @@
             socket.on('player_info', (data) => {
                 playerId = String(data.playerId);
                 window.myWinningMessage = data.winning_message || '';
+                window.mySubmittedMeme = data.submittedImageUrl || null;
+
 
                 if (!playerId) {
                     console.warn("⚠️ playerId not set yet. Skipping voting UI setup.");
@@ -994,6 +996,11 @@
             console.log("🎯 Setting window.myPlayerId from state.me?.id:", state.me?.id);
             window.myPlayerId = state.me?.id || state.playerId || null;
 
+            // ✅ Now safely set submitted meme here from game state
+            window.mySubmittedMeme = state.me?.submittedImageUrl || null;
+            console.log("🖼️ state.me?.submittedImageUrl =", state.me?.submittedImageUrl);
+
+
             console.log("🔑 Set window.myPlayerId =", window.myPlayerId);
             window.lastKnownPlayers = state.players;
             console.log('[🧠] lastKnownPlayers after game_state:', window.lastKnownPlayers);
@@ -1014,20 +1021,36 @@
                 if (el) el.classList.add('hidden');
             });
 
-            // Only hide memeCreationModal if player already submitted
             const memeModal = document.getElementById('memeCreationModal');
-            if (window.hasSubmittedMeme && memeModal) {
-                memeModal.classList.add('hidden');
-            }
 
             if (phase === 'submitting') {
-                const memeModal = document.getElementById('memeCreationModal');
-
                 const alreadyEditing = window.isEditingMeme === true;
-                console.log("still editing?", alreadyEditing);
+                const hasSubmitted = !!window.mySubmittedMeme;
 
-                if (!alreadyEditing && memeModal) {
-                    console.log('🛠️ Setting up submission phase with template:', state.memeTemplate);
+                const submittedMemeImg = document.getElementById('submittedMemeImg');
+                const submittedMemeDisplay = document.getElementById('submittedMemeDisplay');
+                const wrapper = document.getElementById('submittedMemeWrapper');
+
+                // If meme is submitted, show the submitted display and hide the modal
+                if (hasSubmitted && submittedMemeImg && submittedMemeDisplay && wrapper) {
+                    submittedMemeImg.src = window.mySubmittedMeme;
+                    wrapper.classList.remove('hidden');
+                    submittedMemeDisplay.classList.remove('hidden');
+
+                    // 🧼 Hide the modal no matter what
+                    if (memeModal) {
+                        memeModal.classList.add('hidden');
+                        memeModal.classList.remove('flex');
+                        memeModal.style.opacity = "0";
+                        memeModal.style.visibility = "hidden";
+                    }
+
+                    console.log("📸 Showing submitted meme, modal hidden");
+                }
+
+                // If meme is not submitted and you're not editing, initialize the editor
+                if (!hasSubmitted && !alreadyEditing && memeModal) {
+                    console.log('🎨 Setting up meme creation phase with template:', state.memeTemplate);
 
                     memeModal.classList.remove('hidden');
                     memeModal.classList.add('flex');
@@ -1035,22 +1058,23 @@
                     memeModal.style.visibility = "visible";
 
                     setupSubmissionPhase(state.memeTemplate);
-                } else {
-                    console.log("✋ Skipping meme editor re-init — already editing");
                 }
 
                 startTimerBarAnimation('submitting', state.timeLeft || 60);
             } else if (phase === 'voting') {
                 window.maxVotingTime = state.round?.timeLeft || 15;
                 document.getElementById('votingPhase')?.classList.remove('hidden');
+                socket.emit('request_current_submission', { gameId });
+
             } else if (phase === 'results') {
                 document.getElementById('resultsPhase')?.classList.remove('hidden');
-
-                startTimerBarAnimation('results', 30); // Assuming results always lasts 30 seconds
+                socket.emit('request_round_results', { gameId });
+                startTimerBarAnimation('results', 30);
             }
 
             updateGameState(state);
         });
+
 
 
 
@@ -1134,7 +1158,6 @@
 
             switch (phase) {
                 case 'submitting':
-                    setupSubmissionPhase(state.memeTemplate);
                     break;
                 case 'voting':
                     const votingUI = document.getElementById('votingPhase');
@@ -1729,12 +1752,6 @@
 
 
     });
-        window.addEventListener('DOMContentLoaded', () => {
-        const modal = document.getElementById('memeCreationModal');
-        if (modal) {
-            modal.classList.remove('hidden');
-        }
-        });
     </script>
     <script>
         let activeDrag = null;

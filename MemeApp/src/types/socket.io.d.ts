@@ -5,6 +5,7 @@ declare module 'socket.io' {
             userId: number;
             username: string;
             winning_message?: string;
+            submittedImageUrl?: string;
         };
         request: any;
         emit(event: string, ...args: any[]): boolean;

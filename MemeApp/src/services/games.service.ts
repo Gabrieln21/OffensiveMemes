@@ -56,6 +56,7 @@ export interface Player {
     rerollsRemaining?: number;
     winning_message?: string;
     disconnectTimeout?: NodeJS.Timeout; // 👈 Add this line
+    submittedImageUrl?: string;
   }
   
 
@@ -80,6 +81,8 @@ export interface Game {
     votingIndex?: number; // ⬅ track current meme being voted on
     votingTimer?: NodeJS.Timeout; // ⬅ timeout between memes
     votingInProgress?: boolean;
+    nextRoundTimer?: NodeJS.Timeout;
+    lastRoundResults?: any[];
 }
 
 
@@ -445,7 +448,10 @@ class GamesService {
     
     startNewRound(gameId: string, io: Server): void {
         const game = this.getGameById(gameId);
-        if (!game) throw new Error('Game not found'); // ✅ check first
+        if (!game) {
+            console.warn(`⛔ Tried to start new round but game ${gameId} no longer exists.`);
+            return;
+        }
     
         game.currentRound++;
         (game as any).resultsEmitted = false;
@@ -514,7 +520,8 @@ class GamesService {
                     hasVoted: p.hasVoted,
                     votedOn: p.votedOn || [],
                     avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                    winning_message: p.winning_message
+                    winning_message: p.winning_message,
+                    submittedImageUrl: p.submittedImageUrl
                   })),
                 ...(game.round?.status === 'results' && {
                     results: game.round?.submissions.map(s => ({
@@ -666,7 +673,8 @@ class GamesService {
                 hasSubmitted: p.hasSubmitted,
                 hasVoted: p.hasVoted,
                 avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png', // ✅ Must include this
-                winning_message: p.winning_message
+                winning_message: p.winning_message,
+                submittedImageUrl: p.submittedImageUrl
               }))
         };
     }
@@ -740,12 +748,12 @@ class GamesService {
             templateUrl: game.round!.memeTemplates?.[sub.playerId]?.url || '',
             bonuses: sub.bonuses || [],
         }));
-    
+        game.lastRoundResults = resultPayload;
         console.log("📤 Emitting round_results to all players:", resultPayload);
         game.players.forEach(player => {
             player.socket.emit('game_state', {
                 ...this.sanitizeGameForPlayer(game, player.id),
-                me: { id: player.id }, // ✅ Ensure this exists
+                me: { id: player.id, submittedImageUrl: player.submittedImageUrl }, // ✅ Ensure this exists
               });
         });
         game.players.forEach(player => {
@@ -801,7 +809,7 @@ class GamesService {
                     player.socket.emit('game_rankings', { rankings });
                     player.socket.emit('game_state', {
                         ...this.sanitizeGameForPlayer(game, player.id),
-                        me: { id: player.id }, // ✅ Ensure this exists
+                        me: { id: player.id, submittedImageUrl: player.submittedImageUrl }, // ✅ Ensure this exists
                       });
                 });
     
@@ -1043,7 +1051,8 @@ class GamesService {
                     hasVoted: p.hasVoted,
                     votedOn: p.votedOn || [],
                     avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                    winning_message: p.winning_message
+                    winning_message: p.winning_message,
+                    submittedImageUrl: p.submittedImageUrl
                 })),
                 ...(game.round?.status === 'results' && {
                   results: game.round?.submissions.map(s => ({

@@ -214,18 +214,27 @@ const startServer = async (): Promise<void> => {
               
                     // ✅ Emit playerId for frontend tracking
                     socket.emit('player_info', {
-                      playerId: player.id,
-                      winning_message: player.winning_message || ''
+                        playerId: player.id,
+                        username: player.username,
+                        winning_message: player.winning_message,
+                        submittedImageUrl: player.submittedImageUrl || null
                     });
+                    
               
-                    // ✅ Emit full updated state to the NEW player
+                    const currentPlayer = game.players.find(p => String(p.id) === String(socket.data.userId));
+
+                    if (!currentPlayer) {
+                        console.warn("⚠️ Could not find current player for game_state emit");
+                        return;
+                    }
+
                     socket.emit('game_state', {
-                      currentRound: game.currentRound,
-                      totalRounds: game.totalRounds,
-                      round: game.round,
-                      memeTemplate: game.round?.memeTemplates[player.id],
-                      submissions: game.round?.submissions || [],
-                      players: game.players.map((p: Player) => ({
+                    currentRound: game.currentRound,
+                    totalRounds: game.totalRounds,
+                    round: game.round,
+                    memeTemplate: game.round?.memeTemplates[currentPlayer.id],
+                    submissions: game.round?.submissions || [],
+                    players: game.players.map((p: Player) => ({
                         id: p.id,
                         username: p.username,
                         score: p.score,
@@ -234,9 +243,17 @@ const startServer = async (): Promise<void> => {
                         hasVoted: p.hasVoted,
                         votedOn: p.votedOn || [],
                         avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                        winning_message: p.winning_message
-                      }))
+                        winning_message: p.winning_message,
+                        submittedImageUrl: p.submittedImageUrl || null
+                    })),
+                    me: {
+                        id: currentPlayer.id,
+                        username: currentPlayer.username,
+                        submittedImageUrl: currentPlayer.submittedImageUrl || null
+                    }
                     });
+
+
               
                     // ✅ Notify existing players about the new join
                     io.to(`game:${data.gameId}`).emit('player_joined', {
@@ -326,7 +343,8 @@ const startServer = async (): Promise<void> => {
                             hasVoted: p.hasVoted,
                             votedOn: p.votedOn || [],
                             avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                            winning_message: p.winning_message
+                            winning_message: p.winning_message,
+                            submittedImageUrl: p.submittedImageUrl || null
                         })),
                         ...(game.round?.status === 'results' && {
                             results: game.round?.submissions.map(s => ({
@@ -410,7 +428,8 @@ const startServer = async (): Promise<void> => {
                                 hasVoted: p.hasVoted,
                                 votedOn: p.votedOn || [],
                                 avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                                winning_message: p.winning_message
+                                winning_message: p.winning_message,
+                                submittedImageUrl: p.submittedImageUrl || null
                             })),
                             ...(game.round?.status === 'results' && {
                                 results: game.round?.submissions.map(s => ({
@@ -613,6 +632,13 @@ const startServer = async (): Promise<void> => {
                     if (result.success && result.game) {
                         const game = result.game;
             
+                        // ✅ Save image URL to the correct player object
+                        const submittingPlayer = game.players.find((p: Player) => String(p.id) === String(socket.data.userId));
+
+                        if (submittingPlayer) {
+                            submittingPlayer.submittedImageUrl = result.imageUrl; // 💾 This is the line you wanted
+                        }
+            
                         if (game.status === 'finished' && game.winner) {
                             io.to(`game:${data.gameId}`).emit('game_over', {
                                 winner: game.winner,
@@ -625,7 +651,7 @@ const startServer = async (): Promise<void> => {
                                     hasVoted: p.hasVoted,
                                     avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
                                     winning_message: p.winning_message
-                                  }))
+                                }))
                             });
                         }
             
@@ -635,6 +661,12 @@ const startServer = async (): Promise<void> => {
                             round: game.round,
                             currentRound: game.currentRound
                         });
+            
+                        socket.data.submittedImageUrl = result.imageUrl; // 💾 optionally store on socket too
+                        if (submittingPlayer) {
+                            submittingPlayer.submittedImageUrl = result.imageUrl; // ✅ store on player
+                        }
+
             
                         game.players.forEach((p: Player) => {
                             const playerSocket = p.socket;
@@ -654,12 +686,13 @@ const startServer = async (): Promise<void> => {
                                         hasVoted: p.hasVoted,
                                         votedOn: p.votedOn || [],
                                         avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                                        winning_message: p.winning_message
+                                        winning_message: p.winning_message,
+                                        submittedImageUrl: p.submittedImageUrl || null // ✅ make sure it's sent here too!
                                     })),
                                     ...(game.round?.status === 'results' && {
                                         results: game.round?.submissions.map(s => ({
                                             username: s.username,
-                                            memeUrl: s.imageUrl, // ✅ Use rendered image here
+                                            memeUrl: s.imageUrl,
                                             votes: s.votes.length
                                         }))
                                     })
@@ -676,6 +709,7 @@ const startServer = async (): Promise<void> => {
                     callback({ success: false, error: error.message });
                 }
             });
+            
             
 
             socket.on(
@@ -761,7 +795,8 @@ const startServer = async (): Promise<void> => {
                                     hasVoted: p.hasVoted,
                                     votedOn: p.votedOn || [],
                                     avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                                    winning_message: p.winning_message
+                                    winning_message: p.winning_message,
+                                    submittedImageUrl: p.submittedImageUrl || null
                                 })),
                                 ...(game.round?.status === 'results' && {
                                     results: game.round?.submissions.map(s => ({
@@ -886,7 +921,7 @@ const startServer = async (): Promise<void> => {
               
 
 
-            socket.on('leave_game', (data: { gameId: string }) => {
+              socket.on('leave_game', (data: { gameId: string }) => {
                 const { gameId } = data;
                 const userId = socket.data.userId;
               
@@ -936,11 +971,19 @@ const startServer = async (): Promise<void> => {
                   }))
                 });
               
-                // ✅ Update or cleanup game
+                // ✅ If no players left, cleanup the game + cancel any timers
                 if (game.players.length === 0) {
+                  if (game.nextRoundTimer) {
+                    clearTimeout(game.nextRoundTimer);
+                    console.log(`🛑 Cleared nextRoundTimer for game ${gameId}`);
+                  }
+              
                   gamesService.cleanupGame(gameId);
+                  console.log(`🧹 Game ${gameId} deleted because all players left.`);
                 } else {
+                  // ✅ Update game state and broadcast
                   gamesService.updateGame(game);
+              
                   io.emit('games_update', gamesService.getAllGames().map(g => ({
                     id: g.id,
                     passcode: g.passcode,
@@ -954,6 +997,62 @@ const startServer = async (): Promise<void> => {
                   })));
                 }
               });
+
+              socket.on('request_current_submission', (data: { gameId: string }) => {
+                const game = gamesService.getGameById(data.gameId);
+                if (!game || !game.round) return;
+            
+                const currentIndex = game.votingIndex ?? -1;
+            
+                // 🛑 Don't emit if no meme has been shown yet
+                if (currentIndex < 0 || currentIndex >= game.round.submissions.length) {
+                    console.warn(`⚠️ No current voting submission to re-send for game ${data.gameId}`);
+                    return;
+                }
+            
+                const current = game.round.submissions[currentIndex];
+            
+                const player = game.players.find(p => p.socket.id === socket.id);
+                if (!player) return;
+            
+                console.log(`♻️ Re-sending voting_submission to ${player.username} for index ${currentIndex}`);
+            
+                // ⏱️ Optional: send timer update again for visual sync
+                socket.emit('time_update', {
+                    timeLeft: game.round.timeLeft,
+                    phase: game.round.status,
+                });
+            
+                socket.emit('voting_submission', {
+                    template: game.round.memeTemplates,
+                    submission: {
+                        playerId: String(current.playerId),
+                        username: current.username,
+                        imageUrl: current.imageUrl,
+                    },
+                    timeLeft: game.round.timeLeft,
+                });
+            });
+
+            socket.on('request_results', (data: { gameId: string }) => {
+                const game = gamesService.getGameById(data.gameId);
+                if (!game) return;
+            
+                if (Array.isArray(game.lastRoundResults)) {
+                    socket.emit('round_results', { results: game.lastRoundResults });
+                }
+            });
+            
+            socket.on('request_round_results', (data: { gameId: string }) => {
+                const game = gamesService.getGameById(data.gameId);
+                if (!game || !game.lastRoundResults) return;
+            
+                socket.emit('round_results', {
+                    results: game.lastRoundResults
+                });
+            });
+            
+            
               
               
               
