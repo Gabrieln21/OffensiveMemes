@@ -7,8 +7,12 @@ import { pool } from '../config/database';
 import { generateMemeImage } from '../utils/generateMemeImage';
 import { io } from "socket.io-client";
 import { deleteUnstarredMemes } from '../utils/deleteUnstarredMemes';
+import { v4 as uuidv4 } from 'uuid';
+
 
 export interface MemeSubmission {
+    id: string; // 👈 add this
+    templateUrl?: string; // 👈 add this
     playerId: string;
     username: string;
     captions: {
@@ -24,13 +28,14 @@ export interface MemeSubmission {
     bonuses?: {
       name: string;
       points: number;
-    }[]; // 👈 add this line
+    }[];
     reactions?: {
-        from: string;
-        emoji: string;
-        timestamp: number;
-      }[];      
+      from: string;
+      emoji: string;
+      timestamp: number;
+    }[];
   }
+  
   
 export interface MemeTemplate {
     id: string;
@@ -269,12 +274,15 @@ class GamesService {
         }
       
         game.round.submissions.push({
-          playerId,
-          username: player.username,
-          captions,
-          imageUrl,
-          votes: [],
-        });
+            id: uuidv4(), // <-- MAKE SURE THIS IS INCLUDED
+            playerId,
+            username: player.username,
+            captions,
+            imageUrl,
+            votes: [],
+          });
+          
+          
       
         console.log('✅ Submission saved for', player.username, '->', imageUrl);
         player.hasSubmitted = true;

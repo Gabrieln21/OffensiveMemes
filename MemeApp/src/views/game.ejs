@@ -139,7 +139,22 @@
                     </div>
                 </div>
 
-
+                <!-- Emoji Settings Toggle + Slider -->
+                <div id="emojiSettingsWrapper" class="flex items-center gap-2">
+                    <button
+                    id="toggleEmojiSettingsBtn"
+                    class="text-white bg-black/70 rounded px-2 py-1 text-sm hover:bg-purple-600 transition pointer-events-auto z-[9999]">
+                    ⚙️
+                    </button>
+                    <input
+                    type="range"
+                    id="emojiOpacitySlider"
+                    min="0"
+                    max="100"
+                    value="100"
+                    class="hidden w-28 ml-1 bg-purple-500/30 cursor-pointer z-[9998] pointer-events-auto"
+                    >
+                </div>
                 <!-- Voting Buttons -->
                 <div class="flex justify-center gap-4 mb-4">
                     <button id="voteYes"
@@ -167,9 +182,6 @@
                     <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="👎">👎</button>
                     <button type="button" role="button" class="hover:scale-110 transition emoji-btn" data-emoji="🖕">🖕</button>
                 </div>
-                 
-               
-  
             </div>
         </div>
 
@@ -379,6 +391,8 @@
           max-width: 800px;
           aspect-ratio: 16 / 9;
           margin: 0 auto;
+          pointer-events: auto;
+          position: relative;
         }
       
         #currentMemeDisplay img,
@@ -401,6 +415,19 @@
           white-space: pre-wrap;
           z-index: 2;
         }
+
+        #toggleEmojiSettingsBtn {
+            pointer-events: auto;
+            z-index: 9999;
+        }
+
+        #emojiSettingsWrapper {
+            pointer-events: auto !important;
+            z-index: 9999 !important;
+            margin-left: auto;
+        }
+
+
 
         #submittedMemeImg {
             max-width: 100%;
@@ -661,6 +688,7 @@
     <!-- Main Game Logic -->
     <script>
     document.addEventListener('DOMContentLoaded', () => {
+        
         const socket = io();
         window.socket = socket;
 
@@ -843,7 +871,7 @@
                 if (votingPhase) votingPhase.classList.remove('hidden');
 
                 window.currentVotingSubmission = data.submission;
-                console.log("💾 currentVotingSubmission set to:", currentVotingSubmission);
+                console.log("💾 currentVotingSubmission set to:", window.currentVotingSubmission);
 
                 const imageUrl = data.submission.imageUrl || data.template.url;
                 setupVotingEnhancements(imageUrl);
@@ -859,17 +887,12 @@
                     if (isOwn) {
                         newStarBtn.classList.remove('hidden');
                         newStarBtn.disabled = false;
-
                         newStarBtn.onclick = () => {
                             console.log('⭐ Star button clicked!');
                             const imageUrl = currentVotingSubmission?.imageUrl;
                             const captions = currentVotingSubmission?.captions || [];
                             const templateUrl = currentVotingSubmission?.templateUrl || '';
-
-                            if (!imageUrl) {
-                                console.warn('⚠️ No image URL found on currentVotingSubmission');
-                                return;
-                            }
+                            if (!imageUrl) return;
 
                             window.socket.emit('star_meme', {
                                 gameId,
@@ -880,8 +903,6 @@
 
                             newStarBtn.classList.add('opacity-50', 'cursor-not-allowed');
                             newStarBtn.disabled = true;
-
-                            console.log('✅ star_meme emitted:', { gameId, imageUrl });
                         };
                     } else {
                         newStarBtn.classList.add('hidden');
@@ -911,7 +932,6 @@
 
                         newBtn.addEventListener('click', () => {
                             if (hasVotedOnCurrentMeme) return;
-
                             hasVotedOnCurrentMeme = true;
                             const voteType = voteMap[id];
                             submitVote(voteType);
@@ -928,76 +948,123 @@
 
                 const timerEl = document.getElementById('timeLeft');
                 const container = document.getElementById('timerBarContainer');
-
                 const timeLeft = parseInt(data.timeLeft) || 15;
                 window.maxVotingTime = timeLeft;
+
                 requestAnimationFrame(() => {
                     startTimerBarAnimation('voting', timeLeft, data.submission?.id || Date.now());
                 });
 
-                const bar = document.getElementById('timerBar');
-                if (timerEl && bar && container) {
+                if (timerEl && container) {
                     timerEl.textContent = `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`;
-                    bar.style.width = '100%';
-                    bar.classList.remove('bg-red-500');
-                    bar.classList.add('bg-purple-500');
+                    document.getElementById('timerBar').style.width = '100%';
                     container.style.display = 'block';
                 }
 
                 console.log("✅ Voting UI displayed for new submission");
 
-                // ✅ Set up emoji click listener ONCE after votingPhase is shown
+                // ✅ Rebuild emoji slider and toggle
                 requestAnimationFrame(() => {
-                    const emojiButtons = document.querySelectorAll('#emojiReactionsBar .emoji-btn');
-                    emojiButtons.forEach((btn) => {
-                        const cloned = btn.cloneNode(true); // Avoid duplicate listeners
-                        btn.parentNode.replaceChild(cloned, btn);
+                    const oldToggle = document.getElementById('toggleEmojiSettingsBtn');
+                    const oldSlider = document.getElementById('emojiOpacitySlider');
 
-                        if (isOwn) {
-                            cloned.disabled = true;
-                            cloned.classList.add('opacity-50', 'cursor-not-allowed');
-                        } else {
-                            cloned.disabled = false;
-                            cloned.classList.remove('opacity-50', 'cursor-not-allowed');
+                    if (oldToggle && oldSlider) {
+                        const toggleParent = oldToggle.parentNode;
+                        const sliderParent = oldSlider.parentNode;
 
-                            cloned.addEventListener('click', () => {
-                                const emoji = cloned.getAttribute('data-emoji');
-                                console.log("🎯 Emoji button clicked:", emoji);
-                                sendReaction(emoji);
+                        oldToggle.remove();
+                        oldSlider.remove();
+
+                        const newToggle = document.createElement('button');
+                        newToggle.id = 'toggleEmojiSettingsBtn';
+                        newToggle.className = 'text-white bg-black/70 rounded px-2 py-1 text-sm hover:bg-purple-600 transition pointer-events-auto z-[9999]';
+                        newToggle.innerText = '⚙️';
+
+                        const newSlider = document.createElement('input');
+                        newSlider.type = 'range';
+                        newSlider.id = 'emojiOpacitySlider';
+                        newSlider.min = '0';
+                        newSlider.max = '100';
+                        newSlider.value = '100';
+                        newSlider.className = 'hidden w-28 ml-3 bg-purple-500/30 cursor-pointer z-[9998] pointer-events-auto';
+
+                        toggleParent.appendChild(newToggle);
+                        sliderParent.appendChild(newSlider);
+
+                        newToggle.addEventListener('click', () => {
+                            console.log("⚙️ Toggle clicked (rebuilt)");
+                            newSlider.classList.toggle('hidden');
+                        });
+
+                        newSlider.addEventListener('input', (e) => {
+                            const newOpacity = parseInt(e.target.value, 10) / 100;
+                            document.querySelectorAll('#currentMemeDisplay .emoji-float').forEach(el => {
+                                el.style.opacity = newOpacity.toString();
                             });
+                        });
+
+                        console.log('✅ Rebuilt emoji settings toggle and slider');
+                    }
+
+                    // 🧃 Enable/disable emoji buttons
+                    document.querySelectorAll('.emoji-btn').forEach(btn => {
+                        if (isOwn) {
+                            btn.disabled = true;
+                            btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        } else {
+                            btn.disabled = false;
+                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
                         }
                     });
+                    // 🎯 Re-bind emoji button click handlers
+                    document.querySelectorAll('.emoji-btn').forEach(btn => {
+                        const emoji = btn.dataset.emoji;
+                        btn.onclick = () => {
+                            console.log("😂 Emoji clicked:", emoji);
+                            sendReaction(emoji); // 👈 This should already be defined globally
+                        };
+                    });
+
                 });
-
-
-
             });
+
 
         });
 
 
 
+        // 🧃 Handle incoming emoji reactions
         socket.on('reaction_update', (data) => {
             console.log("🔥 Reaction received:", data);
+
             const display = document.getElementById('currentMemeDisplay');
             if (!display) return;
 
             const rect = display.getBoundingClientRect();
             console.log("👀 Meme display size:", rect.width, rect.height);
 
-            // Make sure it's visible
+            // Ensure meme display is visible
             display.classList.remove('hidden');
             display.style.display = 'block';
 
+            // 🎉 Create and position emoji
             const emoji = document.createElement('div');
             emoji.innerText = data.emoji;
-            emoji.className = 'absolute text-4xl animate-bounce pointer-events-none z-50';
+            emoji.className = 'absolute text-4xl animate-bounce pointer-events-none z-50 emoji-float';
             emoji.style.top = `${Math.random() * 60 + 20}%`;
             emoji.style.left = `${Math.random() * 60 + 20}%`;
 
+            // ✨ Set opacity from slider
+            const opacitySlider = document.getElementById('emojiOpacitySlider');
+            const opacity = opacitySlider ? parseInt(opacitySlider.value, 10) / 100 : 1;
+            emoji.style.opacity = opacity.toString();
+
+            // 💥 Append emoji and auto-remove
             display.appendChild(emoji);
             setTimeout(() => emoji.remove(), 2000);
         });
+
+
 
 
 

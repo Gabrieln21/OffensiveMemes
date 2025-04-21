@@ -1011,12 +1011,15 @@ const startServer = async (): Promise<void> => {
                 }
             
                 const current = game.round.submissions[currentIndex];
+                console.log("🎯 CURRENT SUBMISSION", current);
             
                 const player = game.players.find(p => p.socket.id === socket.id);
                 if (!player) return;
             
                 console.log(`♻️ Re-sending voting_submission to ${player.username} for index ${currentIndex}`);
             
+                console.log("🆔 Submission ID:", current.id);
+
                 // ⏱️ Optional: send timer update again for visual sync
                 socket.emit('time_update', {
                     timeLeft: game.round.timeLeft,
@@ -1026,12 +1029,16 @@ const startServer = async (): Promise<void> => {
                 socket.emit('voting_submission', {
                     template: game.round.memeTemplates,
                     submission: {
-                        playerId: String(current.playerId),
-                        username: current.username,
-                        imageUrl: current.imageUrl,
+                      id: current.id,
+                      playerId: String(current.playerId),
+                      username: current.username,
+                      imageUrl: current.imageUrl,
+                      templateUrl: current.templateUrl || '',
+                      captions: current.captions || [],
                     },
                     timeLeft: game.round.timeLeft,
-                });
+                  });
+                  
             });
 
             socket.on('request_results', (data: { gameId: string }) => {
