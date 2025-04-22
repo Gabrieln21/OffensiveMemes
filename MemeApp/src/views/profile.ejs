@@ -103,16 +103,47 @@
 
       <div class="mt-10">
         <h2 class="text-2xl font-semibold text-purple-300 mb-4">⭐ Starred Memes</h2>
-        <div id="starredMemes" class="flex flex-wrap gap-4">
+        <div id="starredMemes" class="space-y-10">
           <% if (starredMemes.length === 0) { %>
             <p class="text-purple-200">You haven’t starred any memes yet.</p>
           <% } else { %>
             <% starredMemes.forEach(meme => { %>
-              <img src="<%= meme.image_url %>" alt="Starred Meme"
-                   class="rounded-xl w-40 h-auto shadow-md m-2" />
+              <div class="bg-purple-900/40 border border-purple-600/20 rounded-2xl p-4 shadow-md">
+                <img src="<%= meme.image_url %>" alt="Starred Meme" class="rounded-xl w-full max-w-md mx-auto mb-4 shadow-lg" />
+        
+                <!-- Like Button + Count -->
+                <form method="POST" action="/profile/like" class="flex items-center gap-3 mb-4">
+                  <input type="hidden" name="memeId" value="<%= meme.id %>" />
+                  <button type="submit" class="text-pink-400 hover:text-pink-600 text-lg">
+                    ❤️ Like
+                  </button>
+                  <span class="text-purple-200 text-sm"><%= meme.likes %> like<%= meme.likes === 1 ? '' : 's' %></span>
+                </form>
+        
+                <!-- Comments List -->
+                <div class="space-y-2 mb-4">
+                  <% meme.comments.forEach(comment => { %>
+                    <div class="bg-black/30 border border-white/10 rounded-lg p-2 text-sm text-purple-100">
+                      <strong>User #<%= comment.user_id %>:</strong> <%= comment.content %>
+                    </div>
+                  <% }) %>
+                </div>
+        
+                <!-- Comment Form -->
+                <form method="POST" action="/profile/comment" class="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                  <input type="hidden" name="memeId" value="<%= meme.id %>" />
+                  <input type="text" name="content" placeholder="Add a comment..." required
+                         class="w-full sm:w-auto flex-1 px-3 py-2 rounded-lg bg-black/40 border border-purple-600/30 text-white placeholder-purple-300" />
+                  <button type="submit"
+                          class="bg-purple-600 hover:bg-purple-700 text-white font-semibold px-4 py-2 rounded-lg transition-all duration-300">
+                    💬 Comment
+                  </button>
+                </form>
+              </div>
             <% }) %>
           <% } %>
         </div>
+        
       </div>
     </div>
   </div>

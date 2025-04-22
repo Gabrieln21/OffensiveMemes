@@ -1,12 +1,11 @@
--- ✅ Friends table
-CREATE TABLE IF NOT EXISTS friends (
-    id SERIAL PRIMARY KEY,
-    requester_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    addressee_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'accepted', 'rejected'
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(requester_id, addressee_id)
+-- ✅ Friendships table (simplified and in use by current routes)
+DROP TABLE IF EXISTS friendships CASCADE;
+CREATE TABLE friendships (
+  user_id_1 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_id_2 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('pending', 'accepted')),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id_1, user_id_2)
 );
 
 -- ✅ Notifications table

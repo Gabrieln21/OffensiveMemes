@@ -173,16 +173,49 @@ class UsersService {
     
       // users.service.ts
       // users.service.ts
-      async getStarredMemes(userId: number) {
-        const result = await pool.query(
-          `SELECT image_url, created_at
-           FROM starred_memes
-           WHERE user_id = $1
-           ORDER BY created_at DESC`,
-          [userId]
-        );
-        return result.rows;
+      async getStarredMemes(profileOwnerId: number) {
+        const { rows: memes } = await pool.query(`
+          SELECT sm.id, sm.image_url, sm.game_id, sm.created_at,
+            COALESCE(ml.likes_count, 0) AS likes,
+            COALESCE(mc.comments, '[]') AS comments
+          FROM starred_memes sm
+          LEFT JOIN (
+            SELECT meme_id, COUNT(*) as likes_count
+            FROM meme_likes
+            GROUP BY meme_id
+          ) ml ON ml.meme_id = sm.id
+          LEFT JOIN (
+            SELECT meme_id,
+              json_agg(
+                json_build_object(
+                  'user_id', mc.user_id,
+                  'content', mc.content,
+                  'created_at', mc.created_at
+                ) ORDER BY mc.created_at DESC
+              ) FILTER (WHERE mc.content IS NOT NULL) AS comments
+            FROM meme_comments mc
+            GROUP BY meme_id
+          ) mc ON mc.meme_id = sm.id
+          WHERE sm.user_id = $1
+          ORDER BY sm.created_at DESC
+        `, [profileOwnerId]);
+      
+        for (const meme of memes) {
+          if (!Array.isArray(meme.comments)) {
+            try {
+              meme.comments = JSON.parse(meme.comments || '[]');
+            } catch {
+              meme.comments = [];
+            }
+          }
+        }
+        
+        
+        console.log('starredMemes:', memes);
+        return memes;
       }
+      
+            
       
       async starMeme(userId: number, imageUrl: string) {
         await pool.query(
