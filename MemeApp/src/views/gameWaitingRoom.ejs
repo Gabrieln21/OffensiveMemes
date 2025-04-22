@@ -41,7 +41,20 @@
         Leave Game
     </a>
 
-
+    <!-- Notifications Bell -->
+    <div id="notificationWrapper" class="absolute top-6 right-6">
+        <button id="notificationBell" class="text-white text-xl hover:text-yellow-300 relative">
+        🔔
+        <span id="notificationDot" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full hidden"></span>
+        </button>
+        <div id="notificationDropdown" class="absolute right-0 mt-2 w-80 bg-black/90 rounded-lg shadow-xl hidden z-50 text-sm">
+        <div class="p-3 font-bold border-b border-purple-600 text-purple-300">Notifications</div>
+        <div id="notificationList" class="max-h-64 overflow-y-auto divide-y divide-purple-700">
+            <div class="p-3 text-gray-400">Loading...</div>
+        </div>
+        </div>
+    </div>
+  
     <div class="container mx-auto px-4 py-16 relative z-10">
         <!-- Game Info Section -->
         <div class="text-center mb-12">
@@ -203,11 +216,13 @@
                 data-player-id="${player.id}">
                 
                 <!-- Avatar -->
-                <div class="w-24 h-24 rounded-full overflow-hidden border-2 border-red-400 shadow-lg">
+                <a href="/profile/${player.id}" target="_blank" rel="noopener noreferrer"
+                class="w-24 h-24 rounded-full overflow-hidden border-2 border-red-400 shadow-lg transform transition-transform hover:scale-105">
                 <img src="${player.avatarUrl || '/uploads/avatars/default-avatar.png'}"
                     alt="${player.username}'s avatar" 
                     class="w-full h-full object-cover" />
-                </div>
+                </a>
+
 
                 <!-- Username and Status -->
                 <div class="text-center">
@@ -314,3 +329,90 @@
 
 
 </script>
+<!-- Notification Scripts -->
+<script>
+    const bell = document.getElementById('notificationBell');
+    const dropdown = document.getElementById('notificationDropdown');
+    const dot = document.getElementById('notificationDot');
+    const list = document.getElementById('notificationList');
+  
+    async function loadNotifications() {
+      const res = await fetch('/notifications/api');
+      const data = await res.json();
+  
+      list.innerHTML = '';
+      if (data.notifications.length === 0) {
+        list.innerHTML = '<div class="p-3 text-gray-400">No notifications yet.</div>';
+        dot.classList.add('hidden');
+        return;
+      }
+  
+      let hasUnread = false;
+  
+      data.notifications.forEach(n => {
+        const item = document.createElement('a');
+        item.className = `block p-3 hover:bg-purple-800/30 transition ${n.is_read ? 'text-gray-300' : 'text-white font-semibold'}`;
+        item.href = getNotificationUrl(n);
+        item.target = '_blank';
+        item.innerText = n.message;
+  
+        // 🧼 Delete after click
+        item.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await fetch('/notifications/delete-single', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: n.id })
+          });
+          item.remove();
+          if (list.children.length === 0) {
+            list.innerHTML = '<div class="p-3 text-gray-400">No notifications yet.</div>';
+          }
+          setTimeout(() => {
+            window.open(getNotificationUrl(n), '_blank');
+          }, 100);
+        });
+  
+        list.appendChild(item);
+        if (!n.is_read) hasUnread = true;
+      });
+  
+      dot.classList.toggle('hidden', !hasUnread);
+    }
+  
+    function getNotificationUrl(n) {
+      switch (n.type) {
+        case 'star_meme':
+          return '/profile';
+        case 'friend_request':
+          return '/friends/page';
+        default:
+          return '/';
+      }
+    }
+  
+    bell?.addEventListener('click', async () => {
+      dropdown.classList.toggle('hidden');
+      if (!dropdown.classList.contains('hidden')) {
+        await loadNotifications();
+        await fetch('/notifications/mark-read', { method: 'POST' });
+        dot.classList.add('hidden');
+      }
+    });
+  
+    setInterval(async () => {
+      const res = await fetch('/notifications/api');
+      const data = await res.json();
+      const hasUnread = data.notifications.some(n => !n.is_read);
+      dot.classList.toggle('hidden', !hasUnread);
+    }, 30000);
+  </script>
+  
+  <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('notificationDot')?.classList.remove('hidden');
+      });
+    </script>
+  <% } %>
+  
