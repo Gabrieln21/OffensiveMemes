@@ -25,8 +25,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.session.user.id;
 
     const { rows } = await pool.query(
-      `
-      SELECT 
+      `SELECT 
         games_played,
         games_won,
         total_points,
@@ -34,8 +33,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
         current_win_streak,
         ROUND(CASE WHEN games_played > 0 THEN total_points::float / games_played ELSE 0 END) AS avg_score
       FROM users
-      WHERE id = $1
-      `,
+      WHERE id = $1`,
       [userId]
     );
 
@@ -59,17 +57,96 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 
     const starredMemes = await usersService.getStarredMemes(userId);
 
+    // 👇 Add this to fetch the friend count
+    const { rows: [friendStats] } = await pool.query(
+      `SELECT COUNT(*) AS count FROM friendships 
+       WHERE (user_id_1 = $1 OR user_id_2 = $1) AND status = 'accepted'`, 
+      [userId]
+    );
+    const friendCount = parseInt(friendStats.count, 10);
+
+    // ✅ Include friendCount in render
     res.render('profile', {
       user: req.session.user,
       stats,
       starredMemes,
+      friendCount,
       session: req.session
     });
+
   } catch (err) {
     console.error('Error loading profile page:', err);
     res.status(500).send('Internal Server Error');
   }
 });
+
+router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
+
+  const profileId = parseInt(req.params.id, 10);
+  const currentUserId = req.session.user?.id;
+
+  if (isNaN(profileId)) {
+    res.status(400).send('Invalid user ID');
+    return;
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, avatar_url FROM users WHERE id = $1`,
+      [profileId]
+    );
+
+    const profileUser = rows[0];
+    if (!profileUser) {
+      res.status(404).send('User not found');
+      return;
+    }
+
+    const { rows: statRows } = await pool.query(
+      `
+      SELECT 
+        games_played,
+        games_won,
+        total_points,
+        highest_score,
+        current_win_streak,
+        ROUND(CASE WHEN games_played > 0 THEN total_points::float / games_played ELSE 0 END) AS avg_score
+      FROM users
+      WHERE id = $1
+      `,
+      [profileId]
+    );
+
+    const stats = {
+      gamesPlayed: statRows[0]?.games_played || 0,
+      wins: statRows[0]?.games_won || 0,
+      avgScore: statRows[0]?.avg_score || 0,
+      highestScore: statRows[0]?.highest_score || 0,
+      currentWinStreak: statRows[0]?.current_win_streak || 0,
+      totalPoints: statRows[0]?.total_points || 0,
+    };
+
+    const starredMemes = await usersService.getStarredMemes(profileId);
+
+    const { rows: [friendStats] } = await pool.query(
+      `SELECT COUNT(*) AS count FROM friendships 
+       WHERE (user_id_1 = $1 OR user_id_2 = $1) AND status = 'accepted'`, [profileId]);
+    const friendCount = parseInt(friendStats.count, 10);
+
+    res.render('profile', {
+      user: profileUser,
+      stats,
+      starredMemes,
+      friendCount,
+      session: req.session
+    });
+  } catch (err) {
+    console.error('Error loading user profile:', err);
+    res.status(500).send('Server error');
+  }
+});
+
+
 
 // Edit profile form
 router.get('/edit', async (req: AuthenticatedRequest, res: Response) => {
@@ -178,5 +255,54 @@ router.post('/comment', async (req: AuthenticatedRequest, res: Response) => {
     res.status(500).json({ success: false, error: 'Database error' });
   }
 });
+
+// Add friend
+router.post('/add-friend', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.session.user?.id;
+  const { targetId } = req.body;
+
+  if (!userId || !targetId) { 
+    res.status(400).json({ success: false, message: 'Missing user IDs' });
+    return;
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO friendships (user_id_1, user_id_2, status)
+       VALUES ($1, $2, 'accepted')
+       ON CONFLICT DO NOTHING`,
+      [userId, targetId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error adding friend:', err);
+    res.status(500).json({ success: false });
+  }
+});
+
+// Remove friendrouter.get('/api'
+router.post('/remove-friend', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.session.user?.id;
+  const { targetId } = req.body;
+
+  if (!userId || !targetId) { 
+    res.status(400).json({ success: false, message: 'Missing user IDs' });
+    return;
+  }
+
+  try {
+    await pool.query(
+      `DELETE FROM friendships 
+       WHERE (user_id_1 = $1 AND user_id_2 = $2) 
+          OR (user_id_1 = $2 AND user_id_2 = $1)`,
+      [userId, targetId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error removing friend:', err);
+    res.status(500).json({ success: false });
+  }
+});
+
 
 export default router;

@@ -10,23 +10,11 @@
       theme: {
         extend: {
           keyframes: {
-            float: {
-              '0%, 100%': { transform: 'translateY(0)' },
-              '50%': { transform: 'translateY(-10px)' }
-            },
-            sparkle: {
-              '0%, 100%': { opacity: 1 },
-              '50%': { opacity: 0.4 }
-            },
+            float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+            sparkle: { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.4 } },
             neonPulse: {
-              '0%, 100%': {
-                'box-shadow': '0 0 20px #ff0000, 0 0 40px #ff0000, 0 0 60px #ff0000',
-                transform: 'scale(1)'
-              },
-              '50%': {
-                'box-shadow': '0 0 25px #ff4444, 0 0 50px #ff4444, 0 0 75px #ff4444',
-                transform: 'scale(1.02)'
-              }
+              '0%, 100%': { boxShadow: '0 0 20px #ff0000, 0 0 40px #ff0000, 0 0 60px #ff0000', transform: 'scale(1)' },
+              '50%': { boxShadow: '0 0 25px #ff4444, 0 0 50px #ff4444, 0 0 75px #ff4444', transform: 'scale(1.02)' }
             }
           },
           animation: {
@@ -64,7 +52,9 @@
             <h1 class="text-4xl font-extrabold bg-gradient-to-r from-purple-300 to-pink-400 bg-clip-text text-transparent">
               <%= user.username %>
             </h1>
-            <p class="text-sm text-purple-200 mt-1">Meme Connoisseur</p>
+            <button id="openFriendsBtn" class="text-sm text-blue-300 hover:text-blue-400 underline mt-1 block transition-all">
+              👥 <%= friendCount %> friend<%= friendCount === 1 ? '' : 's' %>
+            </button>            
           </div>
         </div>
         <% if (session.user && session.user.id === user.id) { %>
@@ -110,10 +100,10 @@
           <% }) %>
         </div>
 
+        <!-- Meme Modal -->
         <div id="memeModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center p-6">
           <div class="bg-gray-900 max-w-5xl w-full rounded-xl shadow-2xl relative overflow-hidden flex flex-col sm:flex-row gap-4 p-6">
             <button onclick="closeMemeModal()" class="absolute top-4 right-4 text-white text-xl">✖</button>
-
             <div class="flex-1">
               <img id="modalMemeImage" src="" class="rounded-xl w-full max-h-[75vh] object-contain" />
               <form method="POST" action="/profile/like" class="flex items-center gap-3 mt-4">
@@ -122,7 +112,6 @@
                 <span id="modalMemeLikes" class="text-purple-200 text-sm"></span>
               </form>
             </div>
-
             <div class="w-full sm:w-80 space-y-3">
               <h3 class="text-xl font-bold text-purple-300">💬 Comments</h3>
               <div id="modalComments" class="space-y-2 max-h-[300px] overflow-y-auto pr-2"></div>
@@ -135,20 +124,26 @@
             </div>
           </div>
         </div>
-      </div>
 
+        <!-- Friends Modal -->
+        <div id="friendsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-6">
+          <div class="bg-gray-900 max-w-md w-full rounded-xl p-6 shadow-2xl relative">
+            <button onclick="closeFriendsModal()" class="absolute top-3 right-3 text-white text-xl">✖</button>
+            <h2 class="text-xl text-purple-300 mb-4">Your Friends</h2>
+            <input id="friendSearch" type="text" placeholder="Search..." class="w-full mb-3 px-3 py-2 rounded bg-black/40 text-white border border-purple-600/30" />
+            <div id="friendListContainer" class="space-y-3 max-h-96 overflow-y-auto"></div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
-
   <script>
     function openMemeModal(element) {
       const meme = JSON.parse(element.dataset.meme);
-
       document.getElementById('modalMemeImage').src = meme.image_url;
       document.getElementById('modalMemeIdForLike').value = meme.id;
       document.getElementById('modalMemeIdForComment').value = meme.id;
       document.getElementById('modalMemeLikes').innerText = `${meme.likes} like${meme.likes === 1 ? '' : 's'}`;
-
       const commentsContainer = document.getElementById('modalComments');
       commentsContainer.innerHTML = '';
       (meme.comments || []).forEach(comment => {
@@ -157,13 +152,98 @@
         div.innerHTML = `<strong>User #${comment.user_id}:</strong> ${comment.content}`;
         commentsContainer.appendChild(div);
       });
-
       document.getElementById('memeModal').classList.remove('hidden');
     }
-
+  
     function closeMemeModal() {
       document.getElementById('memeModal').classList.add('hidden');
     }
+  
+    async function openFriendsModal() {
+      console.log("🧠 openFriendsModal() triggered");
+  
+      document.getElementById('friendsModal').classList.remove('hidden');
+      const res = await fetch('/friends/api');
+      console.log("🧠 openFriendsModal() triggered 2");
+      const data = await res.json();
+      console.log("Fetched friends:", data.friends);
+  
+      const container = document.getElementById('friendListContainer');
+      const search = document.getElementById('friendSearch');
+  
+      function renderList(friends) {
+        container.innerHTML = '';
+        friends.forEach(friend => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'flex justify-between items-center bg-black/30 p-3 rounded-md';
+
+          const info = document.createElement('div');
+          info.className = 'flex items-center gap-3';
+
+          const avatar = document.createElement('img');
+          avatar.src = friend.avatar_url || '/uploads/avatars/default-avatar.png';
+          avatar.alt = `${friend.username}'s avatar`;
+          avatar.className = 'w-10 h-10 rounded-full border border-purple-500 object-cover';
+
+          const nameLink = document.createElement('a');
+          nameLink.href = `/profile/${friend.id}`;
+          nameLink.className = 'text-purple-200 hover:underline font-semibold';
+          nameLink.textContent = friend.username;
+
+          info.appendChild(avatar);
+          info.appendChild(nameLink);
+
+          const btn = document.createElement('button');
+          btn.className = `px-3 py-1 text-sm rounded font-medium transition`;
+          btn.innerText = friend.is_friend ? '− Remove' : '+ Add';
+          const colorClasses = friend.is_friend
+            ? ['bg-red-500', 'hover:bg-red-600']
+            : ['bg-green-500', 'hover:bg-green-600'];
+          btn.classList.add(...colorClasses);
+
+          btn.onclick = async () => {
+            const route = friend.is_friend ? '/profile/remove-friend' : '/profile/add-friend';
+            const res = await fetch(route, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ targetId: friend.id })
+            });
+            if (res.ok) {
+              btn.innerText = friend.is_friend ? '+ Add' : '− Remove';
+              btn.classList.toggle('bg-red-500');
+              btn.classList.toggle('hover:bg-red-600');
+              btn.classList.toggle('bg-green-500');
+              btn.classList.toggle('hover:bg-green-600');
+              friend.is_friend = !friend.is_friend;
+            }
+          };
+
+          wrapper.appendChild(info);
+          wrapper.appendChild(btn);
+          container.appendChild(wrapper);
+        });
+      }
+
+  
+      renderList(data.friends);
+      search.oninput = () => {
+        const q = search.value.toLowerCase();
+        renderList(data.friends.filter(friend => friend.username.toLowerCase().includes(q)));
+      };
+    }
+  
+    function closeFriendsModal() {
+      document.getElementById('friendsModal').classList.add('hidden');
+    }
+  
+    // ✅ Assign click listeners now that DOM is ready
+    window.openFriendsModal = openFriendsModal;
+    window.closeFriendsModal = closeFriendsModal;
+  
+    const openBtn = document.getElementById('openFriendsBtn');
+    if (openBtn) openBtn.addEventListener('click', openFriendsModal);
   </script>
+  </body>
+  
 </body>
 </html>

@@ -148,6 +148,42 @@ router.get('/page', async (req: AuthenticatedRequest, res: Response) => {
       res.status(500).send('Failed to load friends page');
     }
   });
+
+  router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.session.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: 'Not logged in' });
+      return;
+    }
+  
+    try {
+      const { rows } = await pool.query(`
+        SELECT 
+          u.id, 
+          u.username, 
+          u.avatar_url,
+          TRUE AS is_friend
+        FROM friendships f
+        JOIN users u 
+          ON u.id = CASE 
+            WHEN f.user_id_1 = $1 THEN f.user_id_2
+            WHEN f.user_id_2 = $1 THEN f.user_id_1
+          END
+        WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1)
+          AND f.status = 'accepted'
+          AND u.id != $1
+      `, [userId]);
+  
+      res.json({ friends: rows });
+    } catch (err) {
+      console.error('Error fetching friends:', err);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+  
+  
+  
+  
   
 
 export default router;
