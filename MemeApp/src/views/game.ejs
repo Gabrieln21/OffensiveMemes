@@ -688,7 +688,7 @@
     <!-- Main Game Logic -->
     <script>
     document.addEventListener('DOMContentLoaded', () => {
-        
+        window.votedOnSubmissionIds = [];
         const socket = io();
         window.socket = socket;
 
@@ -765,6 +765,13 @@
                 return;
             }
 
+            // ✅ Track that we have seen (and voted on) this meme
+            window.votedOnSubmissionIds = window.votedOnSubmissionIds || [];
+            if (!window.votedOnSubmissionIds.includes(submission.id)) {
+                window.votedOnSubmissionIds.push(submission.id);
+            }
+            console.log("🧠 Updated votedOnSubmissionIds:", window.votedOnSubmissionIds);
+
             // Submit the vote
             console.log("🚀 Submitting vote on:", submission);
 
@@ -785,6 +792,8 @@
         };
 
         window.submitVote = submitVote;
+
+
 
 
 
@@ -859,66 +868,59 @@
 
             socket.on('voting_submission', (data) => {
                 console.log("🔄 FULL voting_submission payload:", JSON.stringify(data, null, 2));
-                console.log("🔄 Received NEW voting_submission", data);
                 console.log("🖼️ Meme image received:", data.submission.imageUrl);
 
-                // 📢 Display voting progress and username
+                // ⬇️ Display voting progress (creator and index out of total)
                 let votingMeta = document.getElementById('votingMetaTop');
                 if (!votingMeta) {
                     votingMeta = document.createElement('div');
                     votingMeta.id = 'votingMetaTop';
                     votingMeta.className = 'text-white text-center mb-2 flex justify-between items-center px-4';
                     votingMeta.style.marginTop = '1rem';
-
                     const memeDisplay = document.getElementById('currentMemeDisplay');
                     memeDisplay?.parentNode?.insertBefore(votingMeta, memeDisplay);
                 }
 
-                // 🧠 Figure out current voting index and total
-                const votedOn = window.votedOnSubmissionIds || []; // make sure this is being tracked
-                const currentIndex = votedOn.length + 1;
-                const total = window.totalVoteableSubmissions || 5; // adjust based on actual game logic
+                const currentIndex = data.currentIndex || '?';
+                const total = data.total || '?';
 
-                // Inject the content
                 votingMeta.innerHTML = `
-                <div class="text-sm font-semibold text-purple-300">👤 Made by <span class="text-white">${data.submission.username}</span></div>
-                <div class="text-sm font-semibold text-purple-300">🗳️ Meme ${currentIndex} of ${total}</div>
+                    <div class="text-sm font-semibold text-purple-300">👤 Made by <span class="text-white">${data.submission.username}</span></div>
+                    <div class="text-sm font-semibold text-purple-300">🗳️ Meme ${currentIndex} of ${total}</div>
                 `;
 
-                const wrapper = document.getElementById('submittedMemeWrapper');
-                const display = document.getElementById('submittedMemeDisplay');
-                if (wrapper) wrapper.classList.add('hidden');
-                if (display) display.classList.add('hidden');
-
-                const memeModal = document.getElementById('memeCreationModal');
-                if (memeModal) memeModal.classList.add('hidden');
+                // Hide submission/waiting screens
+                document.getElementById('submittedMemeWrapper')?.classList.add('hidden');
+                document.getElementById('submittedMemeDisplay')?.classList.add('hidden');
+                document.getElementById('memeCreationModal')?.classList.add('hidden');
 
                 hasVotedOnCurrentMeme = false;
                 clearVotingUI();
 
+                // Set and show meme image
                 const memeImg = document.getElementById('votingMemeTemplate');
                 if (memeImg) {
                     memeImg.style.display = 'block';
                     memeImg.onload = null;
-                    memeImg.onerror = () => {
-                        console.error('❌ Meme image failed to load:', memeImg.src);
-                    };
-                    memeImg.src = '';
-                    memeImg.src = data.submission.imageUrl || data.template.url;
+                    memeImg.onerror = () => console.error('❌ Meme image failed to load:', memeImg.src);
+
+                    const newUrl = data.submission.imageUrl || data.submission.templateUrl || data.template?.url;
+                    if (newUrl) {
+                        memeImg.src = newUrl;
+                    } else {
+                        console.warn("⚠️ No image URL available in voting_submission data");
+                    }
                 }
 
-                const votingPhase = document.getElementById('votingPhase');
-                if (votingPhase) votingPhase.classList.remove('hidden');
 
+                document.getElementById('votingPhase')?.classList.remove('hidden');
+
+                // Set global reference
                 window.currentVotingSubmission = data.submission;
-                console.log("💾 currentVotingSubmission set to:", window.currentVotingSubmission);
-
-                const imageUrl = data.submission.imageUrl || data.template.url;
-                setupVotingEnhancements(imageUrl);
 
                 const isOwn = data?.submission?.playerId?.toString() === playerId?.toString();
-                console.log(`👤 Is own submission? ${isOwn} — Submission: ${data?.submission?.playerId}, You: ${playerId}`);
 
+                // Handle star button for own meme
                 const oldStarBtn = document.getElementById('starMemeBtn');
                 if (oldStarBtn) {
                     const newStarBtn = oldStarBtn.cloneNode(true);
@@ -928,19 +930,11 @@
                         newStarBtn.classList.remove('hidden');
                         newStarBtn.disabled = false;
                         newStarBtn.onclick = () => {
-                            console.log('⭐ Star button clicked!');
                             const imageUrl = currentVotingSubmission?.imageUrl;
                             const captions = currentVotingSubmission?.captions || [];
                             const templateUrl = currentVotingSubmission?.templateUrl || '';
                             if (!imageUrl) return;
-
-                            window.socket.emit('star_meme', {
-                                gameId,
-                                imageUrl,
-                                captions,
-                                templateUrl
-                            });
-
+                            window.socket.emit('star_meme', { gameId, imageUrl, captions, templateUrl });
                             newStarBtn.classList.add('opacity-50', 'cursor-not-allowed');
                             newStarBtn.disabled = true;
                         };
@@ -950,12 +944,8 @@
                     }
                 }
 
-                const voteMap = {
-                    voteYes: 'like',
-                    voteEh: 'meh',
-                    voteNo: 'pass'
-                };
-
+                // Handle voting buttons
+                const voteMap = { voteYes: 'like', voteEh: 'meh', voteNo: 'pass' };
                 Object.keys(voteMap).forEach(id => {
                     const btn = document.getElementById(id);
                     if (!btn) return;
@@ -969,16 +959,12 @@
                     } else {
                         newBtn.disabled = false;
                         newBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-
                         newBtn.addEventListener('click', () => {
                             if (hasVotedOnCurrentMeme) return;
                             hasVotedOnCurrentMeme = true;
 
                             const voteType = voteMap[id];
-                            
-                            setTimeout(() => {
-                                submitVote(voteType);
-                            }, 0);
+                            setTimeout(() => submitVote(voteType), 0);
 
                             Object.keys(voteMap).forEach(lockId => {
                                 const lockBtn = document.getElementById(lockId);
@@ -990,28 +976,28 @@
                     }
                 });
 
-                const timerEl = document.getElementById('timeLeft');
-                const container = document.getElementById('timerBarContainer');
+                // Timer
                 const timeLeft = parseInt(data.timeLeft) || 15;
                 window.maxVotingTime = timeLeft;
-
                 requestAnimationFrame(() => {
                     startTimerBarAnimation('voting', timeLeft, data.submission?.id || Date.now());
                 });
 
+                const timerEl = document.getElementById('timeLeft');
+                const container = document.getElementById('timerBarContainer');
                 if (timerEl && container) {
                     timerEl.textContent = `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}`;
                     document.getElementById('timerBar').style.width = '100%';
                     container.style.display = 'block';
                 }
 
-                console.log("✅ Voting UI displayed for new submission");
+                // Download/Expand setup
+                setupVotingEnhancements(data.submission.imageUrl || data.template.url);
 
-                // ✅ Rebuild emoji slider and toggle
+                // Emoji reactions setup
                 requestAnimationFrame(() => {
                     const oldToggle = document.getElementById('toggleEmojiSettingsBtn');
                     const oldSlider = document.getElementById('emojiOpacitySlider');
-
                     if (oldToggle && oldSlider) {
                         const toggleParent = oldToggle.parentNode;
                         const sliderParent = oldSlider.parentNode;
@@ -1036,7 +1022,6 @@
                         sliderParent.appendChild(newSlider);
 
                         newToggle.addEventListener('click', () => {
-                            console.log("⚙️ Toggle clicked (rebuilt)");
                             newSlider.classList.toggle('hidden');
                         });
 
@@ -1046,31 +1031,21 @@
                                 el.style.opacity = newOpacity.toString();
                             });
                         });
-
-                        console.log('✅ Rebuilt emoji settings toggle and slider');
                     }
 
-                    // 🧃 Enable/disable emoji buttons
                     document.querySelectorAll('.emoji-btn').forEach(btn => {
-                        if (isOwn) {
-                            btn.disabled = true;
-                            btn.classList.add('opacity-50', 'cursor-not-allowed');
-                        } else {
-                            btn.disabled = false;
-                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        btn.disabled = isOwn;
+                        btn.classList.toggle('opacity-50', isOwn);
+                        btn.classList.toggle('cursor-not-allowed', isOwn);
+                        if (!isOwn) {
+                            const emoji = btn.dataset.emoji;
+                            btn.onclick = () => sendReaction(emoji);
                         }
                     });
-                    // 🎯 Re-bind emoji button click handlers
-                    document.querySelectorAll('.emoji-btn').forEach(btn => {
-                        const emoji = btn.dataset.emoji;
-                        btn.onclick = () => {
-                            console.log("😂 Emoji clicked:", emoji);
-                            sendReaction(emoji); // 👈 This should already be defined globally
-                        };
-                    });
-
                 });
             });
+
+
 
 
         });
@@ -1262,9 +1237,23 @@
                 startTimerBarAnimation('submitting', state.timeLeft || 60);
             } else if (phase === 'voting') {
                 window.maxVotingTime = state.round?.timeLeft || 15;
-                document.getElementById('votingPhase')?.classList.remove('hidden');
-                socket.emit('request_current_submission', { gameId });
+                const allSubs = state.round?.submissions || [];
 
+                // ✅ Filter out your own submission
+                const myId = window.myPlayerId?.toString();
+                const voteableSubmissions = allSubs.filter(sub => sub.playerId?.toString() !== myId);
+
+                // ✅ Track votable submissions
+                window.votedOnSubmissionIds = [];
+                window.allSubmissionsForVoting = voteableSubmissions;
+
+                document.getElementById('votingPhase')?.classList.remove('hidden');
+                const totalSubmissions = allSubs.length;
+                // ✅ Emit request with total count so server can reply with proper index + total
+                socket.emit('request_current_submission', {
+                    gameId,
+                    total: totalSubmissions
+                });
             } else if (phase === 'results') {
                 document.getElementById('resultsPhase')?.classList.remove('hidden');
                 socket.emit('request_round_results', { gameId });
