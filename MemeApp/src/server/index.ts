@@ -712,8 +712,7 @@ const startServer = async (): Promise<void> => {
             
             
 
-            socket.on(
-                'submit_vote',
+            socket.on('submit_vote',
                 (
                   data: { gameId: string; submissionPlayerId: string; voteType: 'like' | 'meh' | 'pass' },
                   callback: (response: any) => void
@@ -998,41 +997,31 @@ const startServer = async (): Promise<void> => {
                 }
               });
 
-              socket.on('request_current_submission', (data: { gameId: string }) => {
+              socket.on('request_current_submission', (data: { gameId: string; total: number }) => {
                 const game = gamesService.getGameById(data.gameId);
                 if (!game || !game.round) return;
             
                 const currentIndex = game.votingIndex ?? -1;
             
-                // 🛑 Don't emit if no meme has been shown yet
                 if (currentIndex < 0 || currentIndex >= game.round.submissions.length) {
                     console.warn(`⚠️ No current voting submission to re-send for game ${data.gameId}`);
                     return;
                 }
             
                 const current = game.round.submissions[currentIndex];
-            
                 const player = game.players.find(p => p.socket.id === socket.id);
                 if (!player) return;
             
                 console.log(`♻️ Re-sending voting_submission to ${player.username} for index ${currentIndex}`);
             
-                // ⏱️ Optional: send timer update again for visual sync
                 socket.emit('time_update', {
                     timeLeft: game.round.timeLeft,
                     phase: game.round.status,
                 });
             
-                socket.emit('voting_submission', {
-                    template: game.round.memeTemplates,
-                    submission: {
-                        playerId: String(current.playerId),
-                        username: current.username,
-                        imageUrl: current.imageUrl,
-                    },
-                    timeLeft: game.round.timeLeft,
-                });
             });
+            
+            
 
             socket.on('request_results', (data: { gameId: string }) => {
                 const game = gamesService.getGameById(data.gameId);
@@ -1051,6 +1040,44 @@ const startServer = async (): Promise<void> => {
                     results: game.lastRoundResults
                 });
             });
+
+            socket.on('reaction', (
+                data: {
+                  gameId: string;
+                  submissionPlayerId: string;
+                  emoji: string;
+                },
+                callback?: (res: { success: boolean }) => void
+              ) => {
+                const game = gamesService.getGameById(data.gameId);
+                if (!game) return;
+              
+                const player = game.players.find(p => p.userId === socket.data.userId);
+                if (!player) return;
+              
+                const submission = game.round?.submissions?.find(s => s.playerId === data.submissionPlayerId);
+                if (!submission) return;
+              
+                if (!submission.reactions) submission.reactions = [];
+              
+                submission.reactions.push({
+                  emoji: data.emoji,
+                  from: player.username,
+                  timestamp: Date.now()
+                });
+              
+                io.to(`game:${data.gameId}`).emit('reaction_update', {
+                  emoji: data.emoji,
+                  from: player.username,
+                  timestamp: Date.now()
+                });
+              
+                if (callback) callback({ success: true });
+            });
+              
+              
+              
+              
             
             
               

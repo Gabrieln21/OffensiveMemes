@@ -7,8 +7,12 @@ import { pool } from '../config/database';
 import { generateMemeImage } from '../utils/generateMemeImage';
 import { io } from "socket.io-client";
 import { deleteUnstarredMemes } from '../utils/deleteUnstarredMemes';
+import { v4 as uuidv4 } from 'uuid';
+
 
 export interface MemeSubmission {
+    id: string; // 👈 add this
+    templateUrl?: string; // 👈 add this
     playerId: string;
     username: string;
     captions: {
@@ -24,8 +28,14 @@ export interface MemeSubmission {
     bonuses?: {
       name: string;
       points: number;
-    }[]; // 👈 add this line
+    }[];
+    reactions?: {
+      from: string;
+      emoji: string;
+      timestamp: number;
+    }[];
   }
+  
   
 export interface MemeTemplate {
     id: string;
@@ -37,7 +47,7 @@ export interface Round {
     memeTemplates: Record<string, MemeTemplate>; // ✅ per-player templates
     submissions: MemeSubmission[];
     status: 'submitting' | 'voting' | 'results';
-    timeLeft: number;
+    timeLeft: number;  
 }
 
 export interface Player {
@@ -264,12 +274,15 @@ class GamesService {
         }
       
         game.round.submissions.push({
-          playerId,
-          username: player.username,
-          captions,
-          imageUrl,
-          votes: [],
-        });
+            id: uuidv4(), // <-- MAKE SURE THIS IS INCLUDED
+            playerId,
+            username: player.username,
+            captions,
+            imageUrl,
+            votes: [],
+          });
+          
+          
       
         console.log('✅ Submission saved for', player.username, '->', imageUrl);
         player.hasSubmitted = true;
@@ -377,49 +390,48 @@ class GamesService {
         }
     
         if (submission.playerId === voterId) {
-            console.warn(`⚠️ Player ${voterId} tried to vote on their own meme. Ignored.`);
-            return { success: false, error: 'Cannot vote on own submission' };
-        }
-    
-        if (submission.votes.find(v => v.voterId === voterId)) {
+            console.warn(`⚠️ Player ${voterId} tried to vote on their own meme. Vote ignored.`);
+            // Still advance to next meme, just don't save vote
+        } else if (submission.votes.find(v => v.voterId === voterId)) {
             return { success: false, error: 'Already voted on this submission' };
+        } else {
+            submission.votes.push({ voterId, voteType });
+            console.log(`📊 Recorded vote for ${submissionPlayerId}:`, submission.votes);
         }
     
-        submission.votes.push({ voterId, voteType });
-        console.log(`📊 Current votes on ${submissionPlayerId}:`, submission.votes);
-    
-        // ✅ Update the correct voter's votedOn list
         const voter = game.players.find(p => String(p.userId) === voterId || String(p.id) === voterId);
         if (voter) {
             if (!voter.votedOn) voter.votedOn = [];
             if (!voter.votedOn.includes(submissionPlayerId)) {
                 voter.votedOn.push(submissionPlayerId);
-                console.log(`✅ Updated votedOn for ${voter.username} (${voter.id}):`, voter.votedOn);
             }
+    
+            const allSubmissions = game.round.submissions;
+            const nextIndex = allSubmissions.findIndex(s => !voter.votedOn!.includes(s.playerId));
+    
         }
     
         const totalVoters = game.players.filter(p => String(p.id) !== submissionPlayerId).length;
         const totalVotes = submission.votes.length;
         console.log(`🧮 Submission ${submissionPlayerId} has ${totalVotes}/${totalVoters} votes`);
     
-        // ✅ Check if all players are done voting
         const allDone = game.players.every(player => {
-            const playerIdStr = String(player.id);
-            const others = game.round!.submissions.filter(s => String(s.playerId) !== playerIdStr);
-            const voted = player.votedOn ?? [];
-            const stillLeft = others.filter(s => !voted.includes(String(s.playerId)));
-            console.log(`🔍 Player ${player.username} (${player.id}) has ${stillLeft.length} remaining votes`);
-            return stillLeft.length === 0;
+            const others = game.round!.submissions.map(s => String(s.playerId));
+            return others.every(pid => player.votedOn?.includes(pid));
         });
+    
         /*
         if (allDone) {
             console.log(`✅ All votes submitted in game ${game.id}. Ending round...`);
             this.endRound(game, io);
         }
         */
+    
         this.updateGame(game);
         return { success: true };
     }
+    
+    
     
     
     
@@ -569,10 +581,15 @@ class GamesService {
         io.to(`game:${game.id}`).emit('voting_submission', {
             template: game.round.memeTemplates,
             submission: {
+                id: current.id, // 👈 also include ID to match others
                 playerId: String(current.playerId),
                 username: current.username,
                 imageUrl: current.imageUrl,
+                templateUrl: current.templateUrl || '',
+                captions: current.captions || [],
             },
+            currentIndex: game.votingIndex + 1, // 👈 1-based index
+            total: game.round.submissions.length, // 👈 total = all submissions
             timeLeft: game.round.timeLeft,
         });
     
