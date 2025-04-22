@@ -256,10 +256,29 @@
         item.href = getNotificationUrl(n);
         item.target = '_blank';
         item.innerText = n.message;
-  
+
+        // 🔥 New logic here
+        item.addEventListener('click', async (e) => {
+            e.preventDefault(); // don't immediately navigate
+            await fetch('/notifications/mark-read-single', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: n.id })
+            });
+
+            // Remove the clicked notification from the list
+            item.remove();
+
+            // Navigate after short delay (optional)
+            setTimeout(() => {
+                window.location.href = getNotificationUrl(n);
+            }, 100);
+
+        });
+
         list.appendChild(item);
-        if (!n.is_read) hasUnread = true;
-      });
+       });
+
   
       dot.classList.toggle('hidden', !hasUnread);
     }

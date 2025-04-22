@@ -56,5 +56,21 @@ router.post('/mark-read', async (req: AuthenticatedRequest, res: Response) => {
       res.status(500).json({ error: 'Server error' });
     }
   });
+  router.post('/mark-read-single', async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.session.user?.id;
+    const { id } = req.body;
+    if (!userId || !id) { 
+        res.status(400).json({ error: 'Missing data' });
+        return;
+    }
+
+  
+    await pool.query(
+        `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
+        [id, userId]
+    );
+  
+    res.json({ success: true });
+  });
   
 export default router;
