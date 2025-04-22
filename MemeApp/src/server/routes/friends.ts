@@ -1,0 +1,153 @@
+// src/routes/friends.ts
+
+import express, { Request, Response } from "express";
+import type { AuthenticatedRequest } from '../../types/authenticated-request';
+
+import { pool } from '../../config/database';
+
+const router = express.Router();
+
+// Send a friend request
+router.post('/request', async (req: AuthenticatedRequest, res: Response) => {
+
+  const { receiverId } = req.body;
+  const senderId = req.session.user?.id;
+  if (!senderId || !receiverId) {
+    res.status(400).json({ error: 'Missing fields' });
+    return;
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO friendships (user_id_1, user_id_2, status)
+       VALUES ($1, $2, 'pending')
+       ON CONFLICT DO NOTHING`,
+      [senderId, receiverId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Accept a friend request
+router.post('/accept', async (req: AuthenticatedRequest, res: Response) => {
+  const { senderId } = req.body;
+  const receiverId = req.session.user?.id;
+  if (!senderId || !receiverId) {
+    res.status(400).json({ error: 'Missing fields' });
+    return;
+  }
+
+  try {
+    await pool.query(
+      `UPDATE friendships
+       SET status = 'accepted'
+       WHERE user_id_1 = $1 AND user_id_2 = $2 AND status = 'pending'`,
+      [senderId, receiverId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Remove friend
+router.post('/remove', async (req: AuthenticatedRequest, res: Response) => {
+  const { friendId } = req.body;
+  const userId = req.session.user?.id;
+  if (!userId || !friendId) {
+    res.status(400).json({ error: 'Missing fields' });
+    return;
+  }
+  
+
+  try {
+    await pool.query(
+      `DELETE FROM friendships
+       WHERE (user_id_1 = $1 AND user_id_2 = $2)
+          OR (user_id_1 = $2 AND user_id_2 = $1)`,
+      [userId, friendId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Get list of friends
+router.get('/', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.session.user?.id;
+  if (!userId) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.username, u.avatar_url
+       FROM friendships f
+       JOIN users u ON (u.id = f.user_id_1 OR u.id = f.user_id_2)
+       WHERE f.status = 'accepted'
+         AND (f.user_id_1 = $1 OR f.user_id_2 = $1)
+         AND u.id != $1`,
+      [userId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+// Search users by username
+router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
+  const query = req.query.username;
+  if (!query || typeof query !== 'string') {
+    res.status(400).json({ error: 'Invalid search' });
+    return;
+  }
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, username, avatar_url FROM users
+       WHERE username ILIKE $1
+       LIMIT 10`,
+      [`%${query}%`]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
+router.get('/page', async (req: AuthenticatedRequest, res: Response) => {
+    const userId = req.session.user?.id;
+    if (!userId) return res.redirect('/auth/login');
+  
+    try {
+      const { rows: accepted } = await pool.query(
+        `SELECT u.id, u.username, u.avatar_url FROM friendships f
+         JOIN users u ON (u.id = f.user_id_1 OR u.id = f.user_id_2)
+         WHERE f.status = 'accepted'
+           AND (f.user_id_1 = $1 OR f.user_id_2 = $1)
+           AND u.id != $1`, [userId]);
+  
+      const { rows: pending } = await pool.query(
+        `SELECT u.id, u.username, u.avatar_url FROM friendships f
+         JOIN users u ON u.id = f.user_id_1
+         WHERE f.status = 'pending' AND f.user_id_2 = $1`, [userId]);
+  
+      res.render('friends', { friends: accepted, pending });
+    } catch (err) {
+      console.error('Error rendering friends page:', err);
+      res.status(500).send('Failed to load friends page');
+    }
+  });
+  
+
+export default router;

@@ -1,32 +1,50 @@
--- Create users table
-CREATE TABLE IF NOT EXISTS users (
+-- ✅ Friends table
+CREATE TABLE IF NOT EXISTS friends (
     id SERIAL PRIMARY KEY,
-    username VARCHAR(255) UNIQUE NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    avatar_url VARCHAR(255), -- ✅ Optional user avatar
-    last_login TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    requester_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    addressee_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- 'pending', 'accepted', 'rejected'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(requester_id, addressee_id)
 );
 
--- Create session table for connect-pg-simple
-CREATE TABLE IF NOT EXISTS "session" (
-    "sid" varchar NOT NULL,
-    "sess" json NOT NULL,
-    "expire" timestamp(6) NOT NULL,
-    CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+-- ✅ Notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- Who receives this
+    from_user_id INTEGER REFERENCES users(id), -- Optional: who triggered it
+    type VARCHAR(50) NOT NULL, -- 'new_meme', 'friend_request', etc.
+    message TEXT,
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create index on session expire
-CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
-
--- ✅ Create starred_memes table
-CREATE TABLE IF NOT EXISTS starred_memes (
+-- 🔁 Enhanced starred_memes table for social features
+DROP TABLE IF EXISTS starred_memes;
+CREATE TABLE starred_memes (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     image_url TEXT NOT NULL,
-    game_id TEXT, -- ✅ Used for cleaning up unstarred memes per game
+    game_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, image_url)
+);
+
+-- ✅ Meme Likes
+CREATE TABLE IF NOT EXISTS meme_likes (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    meme_id INTEGER REFERENCES starred_memes(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, meme_id)
+);
+
+-- ✅ Meme Comments
+CREATE TABLE IF NOT EXISTS meme_comments (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    meme_id INTEGER REFERENCES starred_memes(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

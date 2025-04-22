@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Friends</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0)' },
+              '50%': { transform: 'translateY(-10px)' }
+            },
+            sparkle: {
+              '0%, 100%': { opacity: 1 },
+              '50%': { opacity: 0.4 }
+            },
+            neonPulse: {
+              '0%, 100%': {
+                'box-shadow': '0 0 20px #ff0000, 0 0 40px #ff0000, 0 0 60px #ff0000',
+                transform: 'scale(1)'
+              },
+              '50%': {
+                'box-shadow': '0 0 25px #ff4444, 0 0 50px #ff4444, 0 0 75px #ff4444',
+                transform: 'scale(1.02)'
+              }
+            }
+          },
+          animation: {
+            float: 'float 3s ease-in-out infinite',
+            sparkle: 'sparkle 2s ease-in-out infinite',
+            neonPulse: 'neonPulse 2s ease-in-out infinite'
+          }
+        }
+      }
+    };
+  </script>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-purple-800 via-fuchsia-900 to-black text-white font-sans">
+  <!-- Back Button -->
+  <a href="/" class="back-button fixed top-6 left-6 z-50 text-red-500 hover:text-red-400 font-bold text-lg uppercase tracking-wide flex items-center gap-2 bg-black/80 px-5 py-3 rounded-full border border-red-500/30 hover:border-red-500/50 transition-all duration-300 hover:-translate-x-1">
+    <span class="text-2xl">←</span>
+    Back
+  </a>
+  <style>
+    .back-button {
+      text-shadow: 0 0 15px rgba(255, 0, 0, 0.4);
+      box-shadow: 0 0 20px rgba(20, 20, 20, 0.8);
+      backdrop-filter: blur(5px);
+    }
+    .back-button:hover {
+      text-shadow: 0 0 25px rgba(255, 0, 0, 0.7);
+    }
+  </style>
+
+  <div class="container mx-auto px-6 py-12 max-w-3xl relative z-0">
+    <div class="bg-black/40 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-md space-y-10">
+      
+      <!-- Friend List -->
+      <section>
+        <h1 class="text-3xl font-extrabold mb-4 text-white">👥 Your Friends</h1>
+        <div class="space-y-4">
+          <% if (friends.length === 0) { %>
+            <p class="text-gray-400">You don’t have any friends yet 😔</p>
+          <% } else { %>
+            <% friends.forEach(friend => { %>
+              <div class="flex items-center justify-between bg-gray-800 p-4 rounded-xl">
+                <div class="flex items-center gap-4">
+                  <img src="<%= friend.avatar_url || '/uploads/avatars/default-avatar.png' %>" class="w-10 h-10 rounded-full" />
+                  <span class="font-medium text-white"><%= friend.username %></span>
+                </div>
+                <form method="POST" action="/friends/remove">
+                  <input type="hidden" name="friendId" value="<%= friend.id %>" />
+                  <button class="text-red-400 hover:text-red-600 font-semibold">Remove</button>
+                </form>
+              </div>
+            <% }) %>
+          <% } %>
+        </div>
+      </section>
+
+      <!-- Add Friends -->
+      <section>
+        <h2 class="text-2xl font-semibold text-white mb-3">➕ Add Friends</h2>
+        <form id="friendSearchForm" class="flex gap-3 mb-4">
+          <input type="text" name="username" id="usernameSearch" placeholder="Search by username..." class="flex-1 px-4 py-2 rounded bg-gray-800 border border-gray-700 text-white" />
+          <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-semibold">Search</button>
+        </form>
+        <div id="searchResults" class="space-y-3"></div>
+      </section>
+
+      <!-- Pending Requests -->
+      <section>
+        <h2 class="text-2xl font-semibold text-white mb-3">⏳ Pending Requests</h2>
+        <% if (pending.length === 0) { %>
+          <p class="text-gray-400">No pending requests.</p>
+        <% } else { %>
+          <% pending.forEach(req => { %>
+            <div class="flex items-center justify-between bg-gray-800 p-4 rounded-xl">
+              <div class="flex items-center gap-4">
+                <img src="<%= req.avatar_url || '/uploads/avatars/default-avatar.png' %>" class="w-10 h-10 rounded-full" />
+                <span class="font-medium text-white"><%= req.username %></span>
+              </div>
+              <form method="POST" action="/friends/accept">
+                <input type="hidden" name="senderId" value="<%= req.id %>" />
+                <button class="text-green-400 hover:text-green-600 font-semibold">Accept</button>
+              </form>
+            </div>
+          <% }) %>
+        <% } %>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('friendSearchForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('usernameSearch').value.trim();
+      if (!username) return;
+
+      const res = await fetch(`/friends/search?username=${encodeURIComponent(username)}`);
+      const users = await res.json();
+
+      const resultsContainer = document.getElementById('searchResults');
+      resultsContainer.innerHTML = '';
+
+      users.forEach(user => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between bg-gray-800 p-4 rounded-xl';
+
+        div.innerHTML = `
+          <div class="flex items-center gap-4">
+            <img src="${user.avatar_url || '/uploads/avatars/default-avatar.png'}" class="w-10 h-10 rounded-full" />
+            <span class="font-medium text-white">${user.username}</span>
+          </div>
+          <form method="POST" action="/friends/request">
+            <input type="hidden" name="receiverId" value="${user.id}" />
+            <button class="text-blue-400 hover:text-blue-600 font-semibold">Add Friend</button>
+          </form>
+        `;
+
+        resultsContainer.appendChild(div);
+      });
+    });
+  </script>
+</body>
+</html>

@@ -17,6 +17,7 @@ import { gamesService, Game, Player } from "../services/games.service";
 import { usersService } from '../services/users.service';
 import session, { Session } from 'express-session';
 import profileRoutes from './routes/profile';
+import friendsRoutes from './routes/friends';
 
 interface SessionIncomingMessage extends IncomingMessage {
   session: Session & {
@@ -109,6 +110,7 @@ const startServer = async (): Promise<void> => {
     app.use("/rules", rules);
     app.use("/messagetest", messagetest);
     app.use('/profile', profileRoutes); // ✅ This is correct and safe
+    app.use('/friends', friendsRoutes);
 
     // 404 and error handlers
     app.use((_req: Request, _res: Response, next: NextFunction) => {
