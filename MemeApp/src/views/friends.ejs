@@ -56,43 +56,22 @@
     }
   </style>
 
-  <div class="container mx-auto px-6 py-12 max-w-3xl relative z-0">
-    <div class="bg-black/40 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-md space-y-10">
+<div class="container mx-auto px-6 py-12 max-w-3xl relative z-0">
+    <div class="bg-black/40 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-md space-y-12">
       
-      <!-- Friend List -->
+      <!-- ➕ Add Friends -->
       <section>
-        <h1 class="text-3xl font-extrabold mb-4 text-white">👥 Your Friends</h1>
-        <div class="space-y-4">
-          <% if (friends.length === 0) { %>
-            <p class="text-gray-400">You don’t have any friends yet 😔</p>
-          <% } else { %>
-            <% friends.forEach(friend => { %>
-              <div class="flex items-center justify-between bg-gray-800 p-4 rounded-xl">
-                <div class="flex items-center gap-4">
-                  <img src="<%= friend.avatar_url || '/uploads/avatars/default-avatar.png' %>" class="w-10 h-10 rounded-full" />
-                  <span class="font-medium text-white"><%= friend.username %></span>
-                </div>
-                <form method="POST" action="/friends/remove">
-                  <input type="hidden" name="friendId" value="<%= friend.id %>" />
-                  <button class="text-red-400 hover:text-red-600 font-semibold">Remove</button>
-                </form>
-              </div>
-            <% }) %>
-          <% } %>
-        </div>
-      </section>
-
-      <!-- Add Friends -->
-      <section>
-        <h2 class="text-2xl font-semibold text-white mb-3">➕ Add Friends</h2>
+        <h1 class="text-3xl font-extrabold mb-4 text-white">➕ Add Friends</h1>
         <form id="friendSearchForm" class="flex gap-3 mb-4">
           <input type="text" name="username" id="usernameSearch" placeholder="Search by username..." class="flex-1 px-4 py-2 rounded bg-gray-800 border border-gray-700 text-white" />
           <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded font-semibold">Search</button>
         </form>
         <div id="searchResults" class="space-y-3"></div>
       </section>
-
-      <!-- Pending Requests -->
+  
+      <hr class="border-white/10" />
+  
+      <!-- ⏳ Pending Requests -->
       <section>
         <h2 class="text-2xl font-semibold text-white mb-3">⏳ Pending Requests</h2>
         <% if (pending.length === 0) { %>
@@ -112,8 +91,32 @@
           <% }) %>
         <% } %>
       </section>
+  
+      <hr class="border-white/10" />
+  
+      <!-- 👥 Your Friends -->
+      <section>
+        <h2 class="text-2xl font-semibold text-white mb-3">👥 Your Friends</h2>
+        <% if (friends.length === 0) { %>
+          <p class="text-gray-400">You don’t have any friends yet 😔</p>
+        <% } else { %>
+          <% friends.forEach(friend => { %>
+            <div class="flex items-center justify-between bg-gray-800 p-4 rounded-xl">
+              <div class="flex items-center gap-4">
+                <img src="<%= friend.avatar_url || '/uploads/avatars/default-avatar.png' %>" class="w-10 h-10 rounded-full" />
+                <span class="font-medium text-white"><%= friend.username %></span>
+              </div>
+              <form method="POST" action="/friends/remove">
+                <input type="hidden" name="friendId" value="<%= friend.id %>" />
+                <button class="text-red-400 hover:text-red-600 font-semibold">Remove</button>
+              </form>
+            </div>
+          <% }) %>
+        <% } %>
+      </section>
     </div>
   </div>
+  
 
   <script>
     document.getElementById('friendSearchForm')?.addEventListener('submit', async (e) => {

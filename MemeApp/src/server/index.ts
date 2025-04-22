@@ -18,6 +18,7 @@ import { usersService } from '../services/users.service';
 import session, { Session } from 'express-session';
 import profileRoutes from './routes/profile';
 import friendsRoutes from './routes/friends';
+import notificationsRoutes from './routes/notifications';
 
 interface SessionIncomingMessage extends IncomingMessage {
   session: Session & {
@@ -101,7 +102,26 @@ const startServer = async (): Promise<void> => {
 
     const httpServer = createServer(app);
     const io = new Server(httpServer);
-    
+    // 🔴 Middleware to inject unread notifications count
+
+    app.use(async (req, res, next) => {
+        if (req.session.user?.id) {
+        try {
+            const { rows } = await pool.query(
+            `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false`,
+            [req.session.user.id]
+            );
+            res.locals.unreadCount = parseInt(rows[0].count, 10);
+        } catch (err) {
+            console.error("❌ Error fetching unread notification count:", err);
+            res.locals.unreadCount = 0;
+        }
+        } else {
+        res.locals.unreadCount = 0;
+        }
+        next();
+    });
+  
     // ✅ Mount routes now that io is defined
     app.use("/", home);
     app.use("/auth", auth);
@@ -111,6 +131,7 @@ const startServer = async (): Promise<void> => {
     app.use("/messagetest", messagetest);
     app.use('/profile', profileRoutes); // ✅ This is correct and safe
     app.use('/friends', friendsRoutes);
+    app.use('/notifications', notificationsRoutes);
 
     // 404 and error handlers
     app.use((_req: Request, _res: Response, next: NextFunction) => {
@@ -508,24 +529,25 @@ const startServer = async (): Promise<void> => {
             }) => {
                 console.log('star_meme', data);
                 const { gameId, imageUrl, captions, templateUrl } = data;
-                console.log('🧠 socket.data.userId:', socket.data.userId);
                 const userId = socket.data.userId;
-                console.log('📥 star_meme received');
+                const username = socket.data.username || 'Someone';
+                console.log('🧠 socket.data.userId:', userId);
+
                 if (!userId) {
                     console.warn("⚠️ Tried to star meme without a user ID.");
                     return;
                 }
-            
+
                 if (!imageUrl) {
                     console.warn("⚠️ Tried to star meme without an image URL.");
                     return;
                 }
-            
+
                 console.log(`⭐ Meme starred by ${userId}: ${imageUrl}`);
-            
+
                 // ✅ Save in-memory
                 if (!starredMemes[userId]) starredMemes[userId] = [];
-            
+
                 starredMemes[userId].push({
                     gameId,
                     imageUrl,
@@ -533,10 +555,8 @@ const startServer = async (): Promise<void> => {
                     templateUrl,
                     starredAt: new Date().toISOString()
                 });
-            
-                // ✅ Save to DB
+
                 try {
-                    // Ensure imageUrl is a clean relative path
                     const cleanImageUrl = imageUrl.replace(/^.*\/generated\//, '/generated/');
                     console.log(`💾 Saving meme with cleanImageUrl:`, cleanImageUrl);
                     await pool.query(
@@ -545,13 +565,29 @@ const startServer = async (): Promise<void> => {
                         ON CONFLICT (user_id, image_url) DO NOTHING`,
                         [userId, cleanImageUrl, gameId]
                     );
-
-                      
                     console.log(`🗃️ Saved starred meme to DB for user ${userId}`);
+
+                    // 🔔 Notify meme owner (but not yourself)
+                    const { rows } = await pool.query(
+                        `SELECT user_id FROM starred_memes WHERE image_url = $1 ORDER BY id ASC LIMIT 1`,
+                        [cleanImageUrl]
+                    );
+                    const memeOwnerId = rows[0]?.user_id;
+
+                    if (memeOwnerId && memeOwnerId !== userId) {
+                        await pool.query(
+                            `INSERT INTO notifications (user_id, from_user_id, type, message)
+                            VALUES ($1, $2, 'star_meme', $3)`,
+                            [memeOwnerId, userId, `${username} starred your meme!`]
+                        );
+                        console.log(`🔔 Notification sent to user ${memeOwnerId}`);
+                    }
+
                 } catch (err) {
-                    console.error('❌ Error saving starred meme to DB:', err);
+                    console.error('❌ Error saving starred meme or sending notification:', err);
                 }
             });
+
             
             
             // Handle game chat

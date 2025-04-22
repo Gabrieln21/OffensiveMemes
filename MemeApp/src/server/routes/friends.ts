@@ -9,27 +9,39 @@ const router = express.Router();
 
 // Send a friend request
 router.post('/request', async (req: AuthenticatedRequest, res: Response) => {
-
-  const { receiverId } = req.body;
-  const senderId = req.session.user?.id;
-  if (!senderId || !receiverId) {
-    res.status(400).json({ error: 'Missing fields' });
-    return;
-  }
-
-  try {
-    await pool.query(
-      `INSERT INTO friendships (user_id_1, user_id_2, status)
-       VALUES ($1, $2, 'pending')
-       ON CONFLICT DO NOTHING`,
-      [senderId, receiverId]
-    );
-    res.redirect("/friends/page");
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+    const { receiverId } = req.body;
+    const senderId = req.session.user?.id;
+    if (!senderId || !receiverId) {
+      res.status(400).json({ error: 'Missing fields' });
+      return;
+    }
+  
+    try {
+      await pool.query(
+        `INSERT INTO friendships (user_id_1, user_id_2, status)
+         VALUES ($1, $2, 'pending')
+         ON CONFLICT DO NOTHING`,
+        [senderId, receiverId]
+      );
+  
+      // 🔔 Notify receiver
+      const sender = await pool.query(`SELECT username FROM users WHERE id = $1`, [senderId]);
+      const senderUsername = sender.rows[0]?.username || 'Someone';
+  
+      await pool.query(
+        `INSERT INTO notifications (user_id, from_user_id, type, message)
+         VALUES ($1, $2, 'friend_request', $3)`,
+        [receiverId, senderId, `${senderUsername} sent you a friend request!`]
+      );
+  
+      res.redirect("/friends/page");
+  
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+  
 
 // Accept a friend request
 // Accept friend request
