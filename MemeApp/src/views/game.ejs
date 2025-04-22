@@ -927,21 +927,39 @@
                     oldStarBtn.parentNode.replaceChild(newStarBtn, oldStarBtn);
 
                     if (isOwn) {
-                        newStarBtn.classList.remove('hidden');
+                        newStarBtn.classList.remove('hidden', 'opacity-50', 'cursor-not-allowed');
                         newStarBtn.disabled = false;
+
                         newStarBtn.onclick = () => {
-                            const imageUrl = currentVotingSubmission?.imageUrl;
+                            console.log("🌟 Star button clicked!");
+
+                            const memeImg = document.getElementById('votingMemeTemplate');
+                            const imageUrl = memeImg?.src || '';
                             const captions = currentVotingSubmission?.captions || [];
                             const templateUrl = currentVotingSubmission?.templateUrl || '';
-                            if (!imageUrl) return;
+
+                            if (!imageUrl) {
+                                console.warn("❌ No image URL found in memeImg");
+                                return;
+                            }
+
+                            console.log("✨ Emitting star_meme with:", { gameId, imageUrl });
+
                             window.socket.emit('star_meme', { gameId, imageUrl, captions, templateUrl });
-                            newStarBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
                             newStarBtn.disabled = true;
+                            newStarBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                            newStarBtn.innerHTML = '⭐ Starred';
                         };
+
+
+
                     } else {
                         newStarBtn.classList.add('hidden');
+                        newStarBtn.disabled = true;
                         newStarBtn.onclick = null;
                     }
+
                 }
 
                 // Handle voting buttons

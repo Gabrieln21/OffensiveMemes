@@ -506,6 +506,7 @@ const startServer = async (): Promise<void> => {
                 captions: any[];
                 templateUrl: string;
             }) => {
+                console.log('star_meme', data);
                 const { gameId, imageUrl, captions, templateUrl } = data;
                 console.log('🧠 socket.data.userId:', socket.data.userId);
                 const userId = socket.data.userId;
@@ -535,12 +536,16 @@ const startServer = async (): Promise<void> => {
             
                 // ✅ Save to DB
                 try {
+                    // Ensure imageUrl is a clean relative path
+                    const cleanImageUrl = imageUrl.replace(/^.*\/generated\//, '/generated/');
+                    console.log(`💾 Saving meme with cleanImageUrl:`, cleanImageUrl);
                     await pool.query(
                         `INSERT INTO starred_memes (user_id, image_url, game_id) 
-                         VALUES ($1, $2, $3) 
-                         ON CONFLICT (user_id, image_url) DO NOTHING`,
-                        [userId, imageUrl, gameId]
-                      );
+                        VALUES ($1, $2, $3) 
+                        ON CONFLICT (user_id, image_url) DO NOTHING`,
+                        [userId, cleanImageUrl, gameId]
+                    );
+
                       
                     console.log(`🗃️ Saved starred meme to DB for user ${userId}`);
                 } catch (err) {

@@ -12,7 +12,8 @@ export async function deleteUnstarredMemes(gameId: string) {
       [gameId]
     );
     const starredSet = new Set(rows.map(row => row.image_url));
-
+    console.log(`🌟 Starred memes for ${gameId}:`, [...starredSet]);
+      
     const files = fs.readdirSync(generatedDir);
 
     for (const file of files) {
