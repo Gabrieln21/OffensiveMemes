@@ -321,6 +321,25 @@ router.post('/comment', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
+router.post('/unstar', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.session.user?.id;
+  const { imageUrl } = req.body;
+
+  if (!userId || !imageUrl) {
+    console.warn('❌ Missing userId or imageUrl for unstar');
+    res.status(400).send('Missing info');
+    return;
+  }
+
+  await pool.query(
+    `DELETE FROM starred_memes WHERE user_id = $1 AND image_url = $2`,
+    [userId, imageUrl]
+  );
+
+  res.redirect(`/profile/${userId}`);
+});
+
+
 
 
 

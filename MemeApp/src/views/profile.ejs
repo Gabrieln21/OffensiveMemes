@@ -73,7 +73,6 @@
             </button>
           </form>
         <% } %>
-        
       </div>
 
       <div class="mt-10">
@@ -88,8 +87,8 @@
             <p class="text-2xl font-bold text-white"><%= stats.wins %></p>
           </div>
           <div class="bg-purple-800/40 p-4 rounded-xl border border-purple-500 shadow">
-            <p class="text-sm text-purple-200">Meme Likes Received</p>
-            <p class="text-2xl font-bold text-white"><%= stats.likes %></p>
+            <p class="text-sm text-purple-200">All-Time Points</p>
+            <p class="text-2xl font-bold text-white"><%= stats.totalPoints %></p>
           </div>
           <div class="bg-purple-800/40 p-4 rounded-xl border border-purple-500 shadow">
             <p class="text-sm text-purple-200">Average Score</p>
@@ -102,13 +101,26 @@
         <h2 class="text-2xl font-semibold text-purple-300 mb-4">⭐ Starred Memes</h2>
         <div id="starredMemes" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <% starredMemes.forEach(meme => { %>
-            <div class="cursor-pointer group relative" data-meme='<%- JSON.stringify(meme) %>' onclick="openMemeModal(this)">
+            <div class="relative group" data-meme='<%- JSON.stringify(meme) %>' onclick="openMemeModal(this)">
               <img src="<%= meme.image_url %>" alt="Starred Meme"
                    class="rounded-xl w-full aspect-square object-cover shadow-md hover:scale-105 transition-transform duration-300" />
               <div class="absolute bottom-2 left-2 text-xs bg-black/60 px-2 py-1 rounded text-white">
                 ❤️ <%= meme.likes %>
               </div>
+            
+              <% if (session.user && session.user.id === user.id) { %>
+                <form action="/profile/unstar" method="POST"
+                      onclick="event.stopPropagation();"
+                      class="absolute top-2 right-2">
+                  <input type="hidden" name="imageUrl" value="<%= meme.image_url %>">
+                  <button type="submit" title="Unstar"
+                          class="text-red-500 hover:text-red-700 bg-black/50 rounded-full px-2 py-1 text-xs shadow-lg transition">
+                    🗑
+                  </button>
+                </form>
+              <% } %>
             </div>
+            
           <% }) %>
         </div>
 
