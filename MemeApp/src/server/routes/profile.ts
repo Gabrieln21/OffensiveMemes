@@ -80,8 +80,101 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
 
+// Edit profile form
+// Edit Profile Routes
+router.get('/edit', async (req: AuthenticatedRequest, res: Response) => {
+  if (!req.session.user) return res.redirect('/auth/login');
+  res.render('edit-profile', { user: req.session.user });
+});
+
+router.post('/edit', upload.single('avatar'), async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.session.user?.id;
+  const { email, password, winningMessage } = req.body;
+
+  if (!userId) return res.redirect('/auth/login');
+
+  try {
+    if (email) {
+      await pool.query('UPDATE users SET email = $1 WHERE id = $2', [email, userId]);
+      req.session.user!.email = email;
+    }
+
+    if (password) {
+      const hashed = await bcrypt.hash(password, 10);
+      await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, userId]);
+    }
+
+    if (winningMessage !== undefined) {
+      await pool.query('UPDATE users SET winning_message = $1 WHERE id = $2', [winningMessage, userId]);
+      req.session.user!.winning_message = winningMessage;
+    }
+
+    if (req.file) {
+      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
+      await pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, userId]);
+      req.session.user!.avatarUrl = avatarUrl;
+    }
+
+    res.redirect(`/profile/${userId}`);
+  } catch (err) {
+    console.error('Error updating profile:', err);
+    res.status(500).send('Update failed');
+  }
+});
+
+// Add friend (instant accept for now)
+router.post('/add-friend', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.session.user?.id;
+  const { targetId } = req.body;
+
+  if (!userId || !targetId) {
+    res.status(400).json({ success: false, message: 'Missing user IDs' });
+    return;
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO friendships (user_id_1, user_id_2, status)
+       VALUES ($1, $2, 'accepted')
+       ON CONFLICT DO NOTHING`,
+      [userId, targetId]
+    );
+    res.redirect(req.get('referer') || `/profile/${targetId}`);
+
+  } catch (err) {
+    console.error('Error adding friend:', err);
+    res.status(500).json({ success: false });
+  }
+});
+
+
+// Remove friend
+router.post('/remove-friend', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.session.user?.id;
+  const { targetId } = req.body;
+
+  if (!userId || !targetId) {
+    res.status(400).json({ success: false, message: 'Missing user IDs' });
+    return;
+  }
+
+  try {
+    await pool.query(
+      `DELETE FROM friendships 
+       WHERE (user_id_1 = $1 AND user_id_2 = $2) 
+          OR (user_id_1 = $2 AND user_id_2 = $1)`,
+      [userId, targetId]
+    );
+    res.redirect(req.get('referer') || `/profile/${targetId}`);
+
+  } catch (err) {
+    console.error('Error removing friend:', err);
+    res.status(500).json({ success: false });
+  }
+});
+
+router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   const profileId = parseInt(req.params.id, 10);
   const currentUserId = req.session.user?.id;
 
@@ -133,60 +226,32 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
        WHERE (user_id_1 = $1 OR user_id_2 = $1) AND status = 'accepted'`, [profileId]);
     const friendCount = parseInt(friendStats.count, 10);
 
+    let isFriend = false;
+
+    if (currentUserId && currentUserId !== profileId) {
+      const { rows: friendshipRows } = await pool.query(
+        `
+        SELECT 1 FROM friendships
+        WHERE ((user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1))
+          AND status = 'accepted'
+        LIMIT 1
+        `,
+        [currentUserId, profileId]
+      );
+      isFriend = friendshipRows.length > 0;
+    }
+
     res.render('profile', {
       user: profileUser,
       stats,
       starredMemes,
       friendCount,
+      isFriend,
       session: req.session
     });
   } catch (err) {
     console.error('Error loading user profile:', err);
     res.status(500).send('Server error');
-  }
-});
-
-
-
-// Edit profile form
-router.get('/edit', async (req: AuthenticatedRequest, res: Response) => {
-  if (!req.session.user) return res.redirect('/auth/login');
-  res.render('edit-profile', { user: req.session.user });
-});
-
-// Handle edit profile form submission
-router.post('/edit', upload.single('avatar'), async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.session.user?.id;
-  const { email, password, winningMessage } = req.body;
-
-  if (!userId) return res.redirect('/auth/login');
-
-  try {
-    if (email) {
-      await pool.query('UPDATE users SET email = $1 WHERE id = $2', [email, userId]);
-      req.session.user!.email = email;
-    }
-
-    if (password) {
-      const hashed = await bcrypt.hash(password, 10);
-      await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashed, userId]);
-    }
-
-    if (winningMessage !== undefined) {
-      await pool.query('UPDATE users SET winning_message = $1 WHERE id = $2', [winningMessage, userId]);
-      req.session.user!.winning_message = winningMessage;
-    }
-
-    if (req.file) {
-      const avatarUrl = `/uploads/avatars/${req.file.filename}`;
-      await pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, userId]);
-      req.session.user!.avatarUrl = avatarUrl;
-    }
-
-    res.redirect('/profile');
-  } catch (err) {
-    console.error('Error updating profile:', err);
-    res.status(500).send('Update failed');
   }
 });
 
@@ -256,53 +321,7 @@ router.post('/comment', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// Add friend
-router.post('/add-friend', async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.session.user?.id;
-  const { targetId } = req.body;
 
-  if (!userId || !targetId) { 
-    res.status(400).json({ success: false, message: 'Missing user IDs' });
-    return;
-  }
-
-  try {
-    await pool.query(
-      `INSERT INTO friendships (user_id_1, user_id_2, status)
-       VALUES ($1, $2, 'accepted')
-       ON CONFLICT DO NOTHING`,
-      [userId, targetId]
-    );
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Error adding friend:', err);
-    res.status(500).json({ success: false });
-  }
-});
-
-// Remove friendrouter.get('/api'
-router.post('/remove-friend', async (req: AuthenticatedRequest, res: Response) => {
-  const userId = req.session.user?.id;
-  const { targetId } = req.body;
-
-  if (!userId || !targetId) { 
-    res.status(400).json({ success: false, message: 'Missing user IDs' });
-    return;
-  }
-
-  try {
-    await pool.query(
-      `DELETE FROM friendships 
-       WHERE (user_id_1 = $1 AND user_id_2 = $2) 
-          OR (user_id_1 = $2 AND user_id_2 = $1)`,
-      [userId, targetId]
-    );
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Error removing friend:', err);
-    res.status(500).json({ success: false });
-  }
-});
 
 
 export default router;

@@ -24,7 +24,7 @@ router.post('/request', async (req: AuthenticatedRequest, res: Response) => {
        ON CONFLICT DO NOTHING`,
       [senderId, receiverId]
     );
-    res.json({ success: true });
+    res.redirect("/friends/page");
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Database error' });
@@ -32,51 +32,54 @@ router.post('/request', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // Accept a friend request
+// Accept friend request
 router.post('/accept', async (req: AuthenticatedRequest, res: Response) => {
-  const { senderId } = req.body;
-  const receiverId = req.session.user?.id;
-  if (!senderId || !receiverId) {
-    res.status(400).json({ error: 'Missing fields' });
-    return;
-  }
-
-  try {
-    await pool.query(
-      `UPDATE friendships
-       SET status = 'accepted'
-       WHERE user_id_1 = $1 AND user_id_2 = $2 AND status = 'pending'`,
-      [senderId, receiverId]
-    );
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
-
-// Remove friend
-router.post('/remove', async (req: AuthenticatedRequest, res: Response) => {
-  const { friendId } = req.body;
-  const userId = req.session.user?.id;
-  if (!userId || !friendId) {
-    res.status(400).json({ error: 'Missing fields' });
-    return;
-  }
+    const { senderId } = req.body;
+    const receiverId = req.session.user?.id;
   
-
-  try {
-    await pool.query(
-      `DELETE FROM friendships
-       WHERE (user_id_1 = $1 AND user_id_2 = $2)
-          OR (user_id_1 = $2 AND user_id_2 = $1)`,
-      [userId, friendId]
-    );
-    res.json({ success: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Database error' });
-  }
-});
+    if (!senderId || !receiverId) {
+        res.status(400).json({ error: 'Missing fields' });
+        return;
+    }
+  
+    try {
+      await pool.query(
+        `UPDATE friendships
+         SET status = 'accepted'
+         WHERE user_id_1 = $1 AND user_id_2 = $2 AND status = 'pending'`,
+        [senderId, receiverId]
+      );
+      res.redirect("/friends/page");
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+  
+  
+  // Remove any friend (redundant with /remove-friend but kept for completeness)
+  router.post('/remove', async (req: AuthenticatedRequest, res: Response) => {
+    const { friendId } = req.body;
+    const userId = req.session.user?.id;
+  
+    if (!userId || !friendId) {
+      res.status(400).json({ error: 'Missing fields' });
+      return;
+    }
+  
+    try {
+      await pool.query(
+        `DELETE FROM friendships
+         WHERE (user_id_1 = $1 AND user_id_2 = $2)
+            OR (user_id_1 = $2 AND user_id_2 = $1)`,
+        [userId, friendId]
+      );
+      res.redirect("/friends/page");
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
 
 // Get list of friends
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
@@ -149,11 +152,12 @@ router.get('/page', async (req: AuthenticatedRequest, res: Response) => {
     }
   });
 
-  router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
+  // Friends API
+router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.session.user?.id;
     if (!userId) {
-      res.status(401).json({ error: 'Not logged in' });
-      return;
+        res.status(401).json({ error: 'Not logged in' });
+        return;
     }
   
     try {
