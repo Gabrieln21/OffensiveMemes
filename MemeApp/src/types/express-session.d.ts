@@ -1,7 +1,8 @@
-import 'express-session';
+import session from 'express-session';
 
 declare module 'express-session' {
   interface SessionData {
+    userId?: number;
     user?: {
       id: number;
       username: string;
@@ -9,7 +10,6 @@ declare module 'express-session' {
       avatarUrl?: string;
       winning_message?: string;
     };
-    userId?: number;
   }
 }
 

@@ -51,8 +51,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const PostgresStore = connectPgSimple(session);
 
-app.use(
-  session({
+const sessionConfig = session({
     store: new PostgresStore({
       pool: sessionPool,
       tableName: "session",
@@ -63,13 +62,17 @@ app.use(
     saveUninitialized: false,
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      secure: process.env.NODE_ENV === "production"
+      secure: false, // use true only if HTTPS is used
+      sameSite: 'lax' // <- this fixes issues with cookies not being stored
     }
-  })
-);
+  });
+  
 
+// Use shared config for both Express and Socket.IO
+app.use(sessionConfig);
 app.use(flash());
-app.use(sessionMiddleware);
+app.use(sessionMiddleware); // ✅ ADD THIS LINE
+
 
 const PORT = process.env.PORT || 3000;
 
@@ -154,16 +157,8 @@ const startServer = async (): Promise<void> => {
       };
     };
 
-    io.use(wrap(session({
-      store: new PostgresStore({
-        pool: sessionPool,
-        tableName: "session",
-        createTableIfMissing: true
-      }),
-      secret: process.env.SESSION_SECRET || "your_secret_key",
-      resave: false,
-      saveUninitialized: false
-    })));
+    io.use(wrap(sessionConfig)); // ✅ Safe for use with Socket.IO
+
 
     io.use((socket, next) => {
       const session = (socket.request as SessionIncomingMessage).session;
