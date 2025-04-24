@@ -1,7 +1,6 @@
 /// <reference path="../types/express-session.d.ts" />
 import express, { Request, Response, NextFunction } from "express";
 import { Server, Socket } from "socket.io";
-import { DefaultEventsMap } from "@socket.io/component-emitter";
 import { createServer, IncomingMessage } from "http";
 import createError from "http-errors";
 import path from "path";
@@ -14,7 +13,6 @@ import { sessionMiddleware } from "./middleware/authentication";
 import configureLiveReload from "../config/livereload";
 import { pool, pool as sessionPool } from "../config/database";
 import { gamesService, Game, Player } from "../services/games.service";
-import { usersService } from '../services/users.service';
 import session, { Session } from 'express-session';
 import profileRoutes from './routes/profile';
 import friendsRoutes from './routes/friends';
@@ -1139,7 +1137,7 @@ const startServer = async (): Promise<void> => {
         httpServer.listen(availablePort, () => {
             console.log(`🚀 Server running on port ${availablePort}`);
             console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`🔒 Session security: ${process.env.NODE_ENV === 'production' ? 'Secure' : 'Development'}`);
+            console.log(`🔒 Session security: ${process.env.NODE_ENV === 'production' ? 'Secure' : 'Production'}`);
         });
     } catch (error) {
         console.error('Failed to start server:', error);
