@@ -1,5 +1,4 @@
-# UNO-667-Term-Project
+# Unethical Memes Project
 Group Members:
 - Gabriel Fernandez
-- Aldo Zaboni
 - Alex Cohen
