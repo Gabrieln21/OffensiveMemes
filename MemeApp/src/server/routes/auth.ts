@@ -28,9 +28,11 @@ const upload = multer({
   limits: { fileSize: 2 * 1024 * 1024 } // 2MB
 });
 
-router.get("/signup", requireGuest, (_req, res) => {
+router.get("/signup", requireGuest, (req, res) => {
+  console.log("👤 Guest route hit, session.userId:", req.session?.userId);
   res.render("auth/signup", { title: "Sign Up" });
 });
+
 // 👤 Register route
 router.post('/register', requireGuest, upload.single('avatar'), async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   console.log('req.file:', req.file);

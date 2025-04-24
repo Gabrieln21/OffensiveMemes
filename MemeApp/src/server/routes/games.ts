@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from "express";
 import { gamesService } from "../../services/games.service";
 import 'express-session'; // 💥 required for session typing to be applied
-import { AuthenticatedRequest } from "../../server/middleware/authentication"; // ✅ Fixed path
+import type { AuthenticatedRequest } from '../../types/authenticated-request';
 import { Server } from "socket.io";
 
 export default function createGamesRouter(io: Server) {

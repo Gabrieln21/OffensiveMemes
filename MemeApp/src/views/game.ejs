@@ -1204,6 +1204,14 @@
 
             // ✅ Now safely set submitted meme here from game state
             window.mySubmittedMeme = state.me?.submittedImageUrl || null;
+            if (!window.mySubmittedMeme && window.myPlayerId) {
+                const me = state.players.find(p => String(p.id) === String(window.myPlayerId));
+                if (me?.submittedImageUrl) {
+                    window.mySubmittedMeme = me.submittedImageUrl;
+                    console.log("🧠 Fallback: updated submitted meme from players array");
+                }
+            }
+
             console.log("🖼️ state.me?.submittedImageUrl =", state.me?.submittedImageUrl);
 
 
@@ -1238,12 +1246,14 @@
                 const wrapper = document.getElementById('submittedMemeWrapper');
 
                 // If meme is submitted, show the submitted display and hide the modal
-                if (hasSubmitted && submittedMemeImg && submittedMemeDisplay && wrapper) {
+                const isSubmittedThisRound = state.round?.submissions?.some(sub => sub.playerId === window.myPlayerId);
+
+                // If meme is submitted *in this round*, show the display
+                if (hasSubmitted && isSubmittedThisRound && submittedMemeImg && submittedMemeDisplay && wrapper) {
                     submittedMemeImg.src = window.mySubmittedMeme;
                     wrapper.classList.remove('hidden');
                     submittedMemeDisplay.classList.remove('hidden');
 
-                    // 🧼 Hide the modal no matter what
                     if (memeModal) {
                         memeModal.classList.add('hidden');
                         memeModal.classList.remove('flex');
@@ -1251,8 +1261,18 @@
                         memeModal.style.visibility = "hidden";
                     }
 
-                    console.log("📸 Showing submitted meme, modal hidden");
+                    console.log("📸 Showing submitted meme for this round, modal hidden");
+                    } else {
+                    // Else, show the editor
+                    if (memeModal) {
+                        memeModal.classList.remove('hidden');
+                        memeModal.classList.add('flex');
+                        memeModal.style.opacity = "1";
+                        memeModal.style.visibility = "visible";
+                        setupSubmissionPhase(state.memeTemplate);
+                    }
                 }
+
 
                 // If meme is not submitted and you're not editing, initialize the editor
                 if (!hasSubmitted && !alreadyEditing && memeModal) {
@@ -1415,23 +1435,19 @@
                 return;
             }
 
-            if (window.isEditingMeme) {
-                console.log("⛔ Already editing — skipping canvas + caption clearing.");
-                return;
-            }
-
-            window.isEditingMeme = true;
-            window.submitting = false; // 🔒 Add this flag at start
-            console.log("🔧 Incoming template in setupSubmissionPhase:", template);
-
+            // 🔥 Always clear the old image and overlays, even if already editing
             const canvasImage = document.getElementById('memeCanvasTemplate');
-            canvasImage.removeAttribute('width');
-            canvasImage.removeAttribute('height');
-            canvasImage.src = '';
-            canvasImage.src = template.url;
-
+            canvasImage.src = ''; // ❌ Force reset old image
             document.getElementById('captionInputs').innerHTML = '';
             document.getElementById('memeTextOverlays').innerHTML = '';
+
+            window.isEditingMeme = true;
+            window.submitting = false;
+            console.log("🔧 Incoming template in setupSubmissionPhase:", template);
+
+            canvasImage.removeAttribute('width');
+            canvasImage.removeAttribute('height');
+            canvasImage.src = template.url;
 
             initializeMemeCreation(template);
 
@@ -1484,7 +1500,6 @@
                     });
                 }
 
-                // 🔐 Prevent double submission
                 window.submitting = true;
                 saveBtn.disabled = true;
                 saveBtn.textContent = "Saving...";
@@ -1506,14 +1521,12 @@
                         if (submittedMemeImg && submittedMemeDisplay && response.imageUrl) {
                             submittedMemeImg.src = response.imageUrl;
 
-                            // 🔁 Ensure display wrapper is shown again on later rounds
                             const wrapper = document.getElementById('submittedMemeWrapper');
                             if (wrapper) wrapper.classList.remove('hidden');
 
                             submittedMemeDisplay.classList.remove('hidden');
                             console.log("📸 Displaying submitted meme for this round:", response.imageUrl);
                         }
-
                     }
                 });
             };
@@ -1524,6 +1537,7 @@
                 window.submitting = false;
             };
         }
+
 
 
 

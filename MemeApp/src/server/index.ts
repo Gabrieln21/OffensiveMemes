@@ -51,8 +51,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const PostgresStore = connectPgSimple(session);
 
-app.use(
-  session({
+const sessionConfig = session({
     store: new PostgresStore({
       pool: sessionPool,
       tableName: "session",
@@ -63,13 +62,17 @@ app.use(
     saveUninitialized: false,
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      secure: process.env.NODE_ENV === "production"
+      secure: false, // use true only if HTTPS is used
+      sameSite: 'lax' // <- this fixes issues with cookies not being stored
     }
-  })
-);
+  });
+  
 
+// Use shared config for both Express and Socket.IO
+app.use(sessionConfig);
 app.use(flash());
-app.use(sessionMiddleware);
+app.use(sessionMiddleware); // ✅ ADD THIS LINE
+
 
 const PORT = process.env.PORT || 3000;
 
@@ -154,16 +157,8 @@ const startServer = async (): Promise<void> => {
       };
     };
 
-    io.use(wrap(session({
-      store: new PostgresStore({
-        pool: sessionPool,
-        tableName: "session",
-        createTableIfMissing: true
-      }),
-      secret: process.env.SESSION_SECRET || "your_secret_key",
-      resave: false,
-      saveUninitialized: false
-    })));
+    io.use(wrap(sessionConfig)); // ✅ Safe for use with Socket.IO
+
 
     io.use((socket, next) => {
       const session = (socket.request as SessionIncomingMessage).session;
@@ -252,29 +247,31 @@ const startServer = async (): Promise<void> => {
                     }
 
                     socket.emit('game_state', {
-                    currentRound: game.currentRound,
-                    totalRounds: game.totalRounds,
-                    round: game.round,
-                    memeTemplate: game.round?.memeTemplates[currentPlayer.id],
-                    submissions: game.round?.submissions || [],
-                    players: game.players.map((p: Player) => ({
-                        id: p.id,
-                        username: p.username,
-                        score: p.score,
-                        connected: p.connected,
-                        hasSubmitted: p.hasSubmitted,
-                        hasVoted: p.hasVoted,
-                        votedOn: p.votedOn || [],
-                        avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                        winning_message: p.winning_message,
-                        submittedImageUrl: p.submittedImageUrl || null
-                    })),
-                    me: {
-                        id: currentPlayer.id,
-                        username: currentPlayer.username,
-                        submittedImageUrl: currentPlayer.submittedImageUrl || null
-                    }
-                    });
+                        currentRound: game.currentRound,
+                        totalRounds: game.totalRounds,
+                        round: game.round,
+                        memeTemplate: game.round?.memeTemplates[player.id],
+                        submissions: game.round?.submissions || [],
+                        players: game.players.map((p: Player) => ({
+                          id: p.id,
+                          username: p.username,
+                          score: p.score,
+                          connected: p.connected,
+                          hasSubmitted: p.hasSubmitted,
+                          hasVoted: p.hasVoted,
+                          votedOn: p.votedOn || [],
+                          avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
+                          winning_message: p.winning_message,
+                          submittedImageUrl: p.submittedImageUrl || null
+                        })),
+                        me: {
+                          id: player.id,
+                          username: player.username,
+                          submittedImageUrl: player.submittedImageUrl || null,
+                          winning_message: player.winning_message
+                        }
+                      });
+                      
 
 
               
@@ -288,7 +285,7 @@ const startServer = async (): Promise<void> => {
                 }
               
                 if (callback) callback({ success: true });
-              });
+            });
               
             
             
@@ -351,32 +348,37 @@ const startServer = async (): Promise<void> => {
             
                     socket.join(`game:${game.id}`);
             
-                    io.to(`game:${game.id}`).emit('game_state', {
-                        currentRound: game.currentRound,
-                        totalRounds: game.totalRounds,
-                        round: game.round,
-                        memeTemplate: game.round?.memeTemplates[player.id],
-                        submissions: game.round?.submissions || [],
-                        players: game.players.map((p: Player) => ({
-                            id: p.id,
-                            username: p.username,
-                            score: p.score,
-                            connected: p.connected,
-                            hasSubmitted: p.hasSubmitted,
-                            hasVoted: p.hasVoted,
-                            votedOn: p.votedOn || [],
-                            avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                            winning_message: p.winning_message,
-                            submittedImageUrl: p.submittedImageUrl || null
-                        })),
-                        ...(game.round?.status === 'results' && {
-                            results: game.round?.submissions.map(s => ({
-                                username: s.username,
-                                memeUrl: game.round?.memeTemplates.url,
-                                votes: s.votes.length
-                            }))
-                        })
-                    });
+                    game.players.forEach((p: Player) => {
+                        const playerSocket = p.socket;
+                        if (playerSocket) {
+                          playerSocket.emit('game_state', {
+                            currentRound: game.currentRound,
+                            totalRounds: game.totalRounds,
+                            round: game.round,
+                            memeTemplate: game.round?.memeTemplates[p.id],
+                            submissions: game.round?.submissions || [],
+                            players: game.players.map((pl: Player) => ({
+                              id: pl.id,
+                              username: pl.username,
+                              score: pl.score,
+                              connected: pl.connected,
+                              hasSubmitted: pl.hasSubmitted,
+                              hasVoted: pl.hasVoted,
+                              votedOn: pl.votedOn || [],
+                              avatarUrl: pl.avatarUrl || '/uploads/avatars/default-avatar.png',
+                              winning_message: pl.winning_message,
+                              submittedImageUrl: pl.submittedImageUrl || null
+                            })),
+                            me: {
+                              id: p.id,
+                              username: p.username,
+                              submittedImageUrl: p.submittedImageUrl || null,
+                              winning_message: p.winning_message
+                            }
+                          });
+                        }
+                      });
+                      
             
                     io.emit('games_update', gamesService.getAllGames().map(g => ({
                         id: g.id,
@@ -436,32 +438,37 @@ const startServer = async (): Promise<void> => {
             
                     const joinedPlayer = game.players.find(p => p.userId === socket.data.userId);
                     if (joinedPlayer) {
-                        io.to(`game:${game.id}`).emit('game_state', {
-                            currentRound: game.currentRound,
-                            totalRounds: game.totalRounds,
-                            round: game.round,
-                            memeTemplate: game.round?.memeTemplates[player.id],
-                            submissions: game.round?.submissions || [],
-                            players: game.players.map((p: Player) => ({
-                                id: p.id,
-                                username: p.username,
-                                score: p.score,
-                                connected: p.connected,
-                                hasSubmitted: p.hasSubmitted,
-                                hasVoted: p.hasVoted,
-                                votedOn: p.votedOn || [],
-                                avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                                winning_message: p.winning_message,
-                                submittedImageUrl: p.submittedImageUrl || null
-                            })),
-                            ...(game.round?.status === 'results' && {
-                                results: game.round?.submissions.map(s => ({
-                                    username: s.username,
-                                    memeUrl: game.round?.memeTemplates.url,
-                                    votes: s.votes.length
-                                }))
-                            })
+                        game.players.forEach((p: Player) => {
+                            const playerSocket = p.socket;
+                            if (playerSocket) {
+                              playerSocket.emit('game_state', {
+                                currentRound: game.currentRound,
+                                totalRounds: game.totalRounds,
+                                round: game.round,
+                                memeTemplate: game.round?.memeTemplates[p.id],
+                                submissions: game.round?.submissions || [],
+                                players: game.players.map((pl: Player) => ({
+                                  id: pl.id,
+                                  username: pl.username,
+                                  score: pl.score,
+                                  connected: pl.connected,
+                                  hasSubmitted: pl.hasSubmitted,
+                                  hasVoted: pl.hasVoted,
+                                  votedOn: pl.votedOn || [],
+                                  avatarUrl: pl.avatarUrl || '/uploads/avatars/default-avatar.png',
+                                  winning_message: pl.winning_message,
+                                  submittedImageUrl: pl.submittedImageUrl || null
+                                })),
+                                me: {
+                                  id: p.id,
+                                  username: p.username,
+                                  submittedImageUrl: p.submittedImageUrl || null,
+                                  winning_message: p.winning_message
+                                }
+                              });
+                            }
                         });
+                          
                     }
                     console.log('📸 Emitting player_joined with players:', game.players.map(p => ({
                         id: p.id,
@@ -714,34 +721,34 @@ const startServer = async (): Promise<void> => {
                         game.players.forEach((p: Player) => {
                             const playerSocket = p.socket;
                             if (playerSocket) {
-                                io.to(`game:${data.gameId}`).emit('game_state', {
-                                    currentRound: game.currentRound,
-                                    totalRounds: game.totalRounds,
-                                    round: game.round,
-                                    memeTemplate: game.round?.memeTemplates[p.id],
-                                    submissions: game.round?.submissions || [],
-                                    players: game.players.map((p: Player) => ({
-                                        id: p.id,
-                                        username: p.username,
-                                        score: p.score,
-                                        connected: p.connected,
-                                        hasSubmitted: p.hasSubmitted,
-                                        hasVoted: p.hasVoted,
-                                        votedOn: p.votedOn || [],
-                                        avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                                        winning_message: p.winning_message,
-                                        submittedImageUrl: p.submittedImageUrl || null // ✅ make sure it's sent here too!
-                                    })),
-                                    ...(game.round?.status === 'results' && {
-                                        results: game.round?.submissions.map(s => ({
-                                            username: s.username,
-                                            memeUrl: s.imageUrl,
-                                            votes: s.votes.length
-                                        }))
-                                    })
-                                });
+                              playerSocket.emit('game_state', {
+                                currentRound: game.currentRound,
+                                totalRounds: game.totalRounds,
+                                round: game.round,
+                                memeTemplate: game.round?.memeTemplates[p.id],
+                                submissions: game.round?.submissions || [],
+                                players: game.players.map((pl: Player) => ({
+                                  id: pl.id,
+                                  username: pl.username,
+                                  score: pl.score,
+                                  connected: pl.connected,
+                                  hasSubmitted: pl.hasSubmitted,
+                                  hasVoted: pl.hasVoted,
+                                  votedOn: pl.votedOn || [],
+                                  avatarUrl: pl.avatarUrl || '/uploads/avatars/default-avatar.png',
+                                  winning_message: pl.winning_message,
+                                  submittedImageUrl: pl.submittedImageUrl || null
+                                })),
+                                me: {
+                                  id: p.id,
+                                  username: p.username,
+                                  submittedImageUrl: p.submittedImageUrl || null,
+                                  winning_message: p.winning_message
+                                }
+                              });
                             }
-                        });
+                          });
+                          
             
                         callback({ success: true, imageUrl: result.imageUrl });
                     } else {
@@ -819,37 +826,37 @@ const startServer = async (): Promise<void> => {
                         status: 'playing'
                     });
             
-                    game.players.forEach(player => {
-                        const playerSocket = player.socket;
+                    game.players.forEach((p: Player) => {
+                        const playerSocket = p.socket;
                         if (playerSocket) {
-                            io.to(`game:${data.gameId}`).emit('game_state', {
-                                currentRound: game.currentRound,
-                                totalRounds: game.totalRounds,
-                                round: game.round,
-                                memeTemplate: game.round?.memeTemplates[player.id],
-                                submissions: game.round?.submissions || [],
-                                players: game.players.map((p: Player) => ({
-                                    id: p.id,
-                                    username: p.username,
-                                    score: p.score,
-                                    connected: p.connected,
-                                    hasSubmitted: p.hasSubmitted,
-                                    hasVoted: p.hasVoted,
-                                    votedOn: p.votedOn || [],
-                                    avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                                    winning_message: p.winning_message,
-                                    submittedImageUrl: p.submittedImageUrl || null
-                                })),
-                                ...(game.round?.status === 'results' && {
-                                    results: game.round?.submissions.map(s => ({
-                                        username: s.username,
-                                        memeUrl: game.round?.memeTemplates.url,
-                                        votes: s.votes.length
-                                    }))
-                                })
-                            });
+                          playerSocket.emit('game_state', {
+                            currentRound: game.currentRound,
+                            totalRounds: game.totalRounds,
+                            round: game.round,
+                            memeTemplate: game.round?.memeTemplates[p.id],
+                            submissions: game.round?.submissions || [],
+                            players: game.players.map((pl: Player) => ({
+                              id: pl.id,
+                              username: pl.username,
+                              score: pl.score,
+                              connected: pl.connected,
+                              hasSubmitted: pl.hasSubmitted,
+                              hasVoted: pl.hasVoted,
+                              votedOn: pl.votedOn || [],
+                              avatarUrl: pl.avatarUrl || '/uploads/avatars/default-avatar.png',
+                              winning_message: pl.winning_message,
+                              submittedImageUrl: pl.submittedImageUrl || null
+                            })),
+                            me: {
+                              id: p.id,
+                              username: p.username,
+                              submittedImageUrl: p.submittedImageUrl || null,
+                              winning_message: p.winning_message
+                            }
+                          });
                         }
-                    });
+                      });
+                      
             
                     callback({ success: true });
                 } catch (error: any) {
