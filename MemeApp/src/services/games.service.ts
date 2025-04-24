@@ -503,48 +503,48 @@ class GamesService {
         // ✅ Reset player submission and voting state
         game.players.forEach((player) => {
             player.hasSubmitted = false;
+            player.submittedImageUrl = ''; // 🔥 clear old submitted meme
             player.hasVoted = false;
             player.votingProgress = 0;
             player.currentVoteIndex = 0;
-            player.votedOn = []; // ✅ Important: Reset votes per round
+            player.votedOn = [];
             player.rerollsRemaining = 3;
         });
+        
     
         console.log(`🚀 Game ${gameId} is now in 'submitting' phase.`);
     
         this.updateGame(game);
     
         // ✅ Emit full game state to all clients
-        game.players.forEach((player) => {
-            console.log(`📡 Sending 'game_state' update to player ${player.username}`);
+        game.players.forEach(player => {
             player.socket.emit('game_state', {
-                currentRound: game.currentRound,
-                totalRounds: game.totalRounds,
-                round: game.round,
-                memeTemplate: game.round?.memeTemplates[player.id],
-                submissions: game.round?.submissions || [],
-                players: game.players.map((p: Player) => ({
-                    id: p.id,
-                    username: p.username,
-                    score: p.score,
-                    connected: p.connected,
-                    hasSubmitted: p.hasSubmitted,
-                    hasVoted: p.hasVoted,
-                    votedOn: p.votedOn || [],
-                    avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                    winning_message: p.winning_message,
-                    submittedImageUrl: p.submittedImageUrl
-                  })),
-                ...(game.round?.status === 'results' && {
-                    results: game.round?.submissions.map(s => ({
-                        username: s.username,
-                        memeUrl: s.imageUrl,
-                        votes: s.votes.length,
-                        avatarUrl: player?.avatarUrl || '/uploads/avatars/default-avatar.png'
-                    }))
-                })
+              currentRound: game.currentRound,
+              totalRounds: game.totalRounds,
+              round: game.round,
+              memeTemplate: game.round!.memeTemplates[player.id], // ✅ player-specific
+              submissions: game.round!.submissions || [],
+              players: game.players.map((p: Player) => ({
+                id: p.id,
+                username: p.username,
+                score: p.score,
+                connected: p.connected,
+                hasSubmitted: p.hasSubmitted,
+                hasVoted: p.hasVoted,
+                votedOn: p.votedOn || [],
+                avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
+                winning_message: p.winning_message,
+                submittedImageUrl: p.submittedImageUrl || null
+              })),
+              me: {
+                id: player.id,
+                username: player.username,
+                submittedImageUrl: player.submittedImageUrl || null,
+                winning_message: player.winning_message
+              }
             });
-        });
+          });
+          
     
         this.startTimer(game, io);
     }
@@ -840,7 +840,18 @@ class GamesService {
         setTimeout(() => {
             this.startNewRound(game.id, io);
         }, 30000);
-    
+        // ✅ Emit game_state again in case someone missed it or is stuck on results screen
+        game.players.forEach((player) => {
+            player.socket.emit('game_state', {
+            ...this.sanitizeGameForPlayer(game, player.id),
+            me: {
+                id: player.id,
+                submittedImageUrl: player.submittedImageUrl || null,
+                winning_message: player.winning_message
+            }
+            });
+        });
+  
         this.updateGame(game);
     }
     
