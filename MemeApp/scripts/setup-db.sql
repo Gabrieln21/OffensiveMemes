@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS "session" (
 -- Create index on session expire
 CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
 
--- Create users table
 -- Create users table (with additional stats columns)
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
@@ -35,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     avatar_url VARCHAR(255), -- Optional: profile picture
+    winning_message TEXT DEFAULT '', -- 🆕 Added here
     total_points INTEGER DEFAULT 0,
     games_played INTEGER DEFAULT 0,
     games_won INTEGER DEFAULT 0,
@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS users (
     last_login TIMESTAMP WITH TIME ZONE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
 
 -- Grant table privileges to uno_user
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO uno_user;
