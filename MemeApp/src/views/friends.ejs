@@ -94,7 +94,9 @@
             <div class="flex items-center justify-between bg-gray-800 p-4 rounded-xl">
               <div class="flex items-center gap-4">
                 <img src="<%= req.avatar_url || '/uploads/avatars/default-avatar.png' %>" class="w-10 h-10 rounded-full" />
-                <span class="font-medium text-white"><%= req.username %></span>
+                <a href="/profile/<%= req.id %>" target="_blank" class="font-medium text-white hover:underline">
+                  <%= req.username %>
+                </a>                
               </div>
               <form method="POST" action="/friends/accept">
                 <input type="hidden" name="senderId" value="<%= req.id %>" />
@@ -113,18 +115,23 @@
         <% if (friends.length === 0) { %>
           <p class="text-gray-400">You don’t have any friends yet 😔</p>
         <% } else { %>
-          <% friends.forEach(friend => { %>
-            <div class="flex items-center justify-between bg-gray-800 p-4 rounded-xl">
-              <div class="flex items-center gap-4">
-                <img src="<%= friend.avatar_url || '/uploads/avatars/default-avatar.png' %>" class="w-10 h-10 rounded-full" />
-                <span class="font-medium text-white"><%= friend.username %></span>
+          <div class="space-y-3"></div>
+            <% friends.forEach(friend => { %>
+              <div class="flex items-center justify-between bg-gray-800 p-4 rounded-xl">
+                <div class="flex items-center gap-4">
+                  <img src="<%= friend.avatar_url || '/uploads/avatars/default-avatar.png' %>" class="w-10 h-10 rounded-full" />
+                  <a href="/profile/<%= friend.id %>" target="_blank" class="font-medium text-white hover:underline">
+                    <%= friend.username %>
+                  </a>
+
+                </div>
+                <form method="POST" action="/friends/remove">
+                  <input type="hidden" name="friendId" value="<%= friend.id %>" />
+                  <button class="text-red-400 hover:text-red-600 font-semibold">Remove</button>
+                </form>
               </div>
-              <form method="POST" action="/friends/remove">
-                <input type="hidden" name="friendId" value="<%= friend.id %>" />
-                <button class="text-red-400 hover:text-red-600 font-semibold">Remove</button>
-              </form>
-            </div>
-          <% }) %>
+            <% }) %>
+          </div>
         <% } %>
       </section>
     </div>
@@ -144,13 +151,17 @@
       resultsContainer.innerHTML = '';
 
       users.forEach(user => {
+        if (user.id === window.currentUserId) return; // 🛑 Skip yourself
+
         const div = document.createElement('div');
-        div.className = 'flex items-center justify-between bg-gray-800 p-4 rounded-xl';
+        div.className = 'flex items-center justify-between bg-gray-800 p-4 rounded-xl mb-3';
 
         div.innerHTML = `
           <div class="flex items-center gap-4">
             <img src="${user.avatar_url || '/uploads/avatars/default-avatar.png'}" class="w-10 h-10 rounded-full" />
-            <span class="font-medium text-white">${user.username}</span>
+            <a href="/profile/${user.id}" target="_blank" class="font-medium text-white hover:underline">
+              ${user.username}
+            </a>
           </div>
           <form method="POST" action="/friends/request">
             <input type="hidden" name="receiverId" value="${user.id}" />
@@ -160,6 +171,7 @@
 
         resultsContainer.appendChild(div);
       });
+
     });
   </script>
 

@@ -15,7 +15,11 @@ router.post('/request', async (req: AuthenticatedRequest, res: Response) => {
       res.status(400).json({ error: 'Missing fields' });
       return;
     }
-  
+    if (senderId === receiverId) {
+      res.status(400).json({ error: 'You can’t friend yourself 😭' });
+      return;
+    }
+
     try {
       await pool.query(
         `INSERT INTO friendships (user_id_1, user_id_2, status)
@@ -121,6 +125,8 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
 // Search users by username
 router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
   const query = req.query.username;
+  const currentUserId = req.session.user?.id;
+
   if (!query || typeof query !== 'string') {
     res.status(400).json({ error: 'Invalid search' });
     return;
@@ -129,9 +135,9 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { rows } = await pool.query(
       `SELECT id, username, avatar_url FROM users
-       WHERE username ILIKE $1
+       WHERE username ILIKE $1 AND id != $2
        LIMIT 10`,
-      [`%${query}%`]
+      [`%${query}%`, currentUserId]
     );
     res.json(rows);
   } catch (err) {
@@ -139,6 +145,7 @@ router.get('/search', async (req: AuthenticatedRequest, res: Response) => {
     res.status(500).json({ error: 'Database error' });
   }
 });
+
 
 router.get('/page', async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.session.user?.id;
@@ -165,29 +172,30 @@ router.get('/page', async (req: AuthenticatedRequest, res: Response) => {
   });
 
   // Friends API
-router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
+  router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
     const userId = req.session.user?.id;
     if (!userId) {
-        res.status(401).json({ error: 'Not logged in' });
-        return;
+      res.status(401).json({ error: 'Not logged in' });
+      return;
     }
   
     try {
       const { rows } = await pool.query(`
         SELECT 
-          u.id, 
-          u.username, 
+          u.id,
+          u.username,
           u.avatar_url,
-          TRUE AS is_friend
+          CASE 
+            WHEN f.status = 'accepted' THEN 'accepted'
+            WHEN f.status = 'pending' AND f.user_id_1 = $1 THEN 'pending'
+            WHEN f.status = 'pending' AND f.user_id_2 = $1 THEN 'incoming'
+          END AS status
         FROM friendships f
         JOIN users u 
-          ON u.id = CASE 
-            WHEN f.user_id_1 = $1 THEN f.user_id_2
-            WHEN f.user_id_2 = $1 THEN f.user_id_1
-          END
-        WHERE (f.user_id_1 = $1 OR f.user_id_2 = $1)
-          AND f.status = 'accepted'
-          AND u.id != $1
+          ON (u.id = f.user_id_2 AND f.user_id_1 = $1)
+          OR (u.id = f.user_id_1 AND f.user_id_2 = $1)
+        WHERE u.id != $1
+        ORDER BY u.username
       `, [userId]);
   
       res.json({ friends: rows });
@@ -196,6 +204,10 @@ router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
       res.status(500).json({ error: 'Server error' });
     }
   });
+  
+  
+  
+  
   
   
   
