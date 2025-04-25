@@ -181,7 +181,12 @@
             return;
         }
 
-        container.innerHTML = games.map(game => `
+        // 🔍 Deduplicate based on game.passcode (or gameId if that's your unique key)
+        const uniqueGames = Array.from(
+            new Map(games.map(game => [game.passcode, game])).values()
+        );
+
+        container.innerHTML = uniqueGames.map(game => `
             <div class="bg-white/5 rounded-xl p-6 flex items-center justify-between hover:bg-white/10 transition-all duration-300">
                 <div>
                     <h4 class="font-bold text-lg">Game #${game.passcode}</h4>
@@ -201,6 +206,7 @@
             </div>
         `).join('');
     }
+
 
     socket.emit('get_games', {}, (response) => {
         if (response.games) {

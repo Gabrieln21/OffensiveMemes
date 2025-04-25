@@ -134,19 +134,34 @@ router.post('/add-friend', async (req: AuthenticatedRequest, res: Response) => {
   }
 
   try {
+    // Send a friend request (pending status)
     await pool.query(
       `INSERT INTO friendships (user_id_1, user_id_2, status)
-       VALUES ($1, $2, 'accepted')
+       VALUES ($1, $2, 'pending')
        ON CONFLICT DO NOTHING`,
       [userId, targetId]
     );
-    res.redirect(req.get('referer') || `/profile/${targetId}`);
 
+    // Send a notification to the target user
+    const { rows } = await pool.query(
+      `SELECT username FROM users WHERE id = $1`,
+      [userId]
+    );
+    const username = rows[0]?.username || 'Someone';
+
+    await pool.query(
+      `INSERT INTO notifications (user_id, from_user_id, type, message)
+       VALUES ($1, $2, 'friend_request', $3)`,
+      [targetId, userId, `${username} sent you a friend request!`]
+    );
+
+    res.redirect(req.get('referer') || `/profile/${targetId}`);
   } catch (err) {
-    console.error('Error adding friend:', err);
+    console.error('Error sending friend request:', err);
     res.status(500).json({ success: false });
   }
 });
+
 
 
 // Remove friend
@@ -173,6 +188,8 @@ router.post('/remove-friend', async (req: AuthenticatedRequest, res: Response) =
     res.status(500).json({ success: false });
   }
 });
+
+
 
 router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
   const profileId = parseInt(req.params.id, 10);
@@ -240,6 +257,17 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
       );
       isFriend = friendshipRows.length > 0;
     }
+    let hasPendingRequest = false;
+
+    if (currentUserId && currentUserId !== profileId) {
+      const { rows: pendingRows } = await pool.query(
+        `SELECT 1 FROM friendships
+        WHERE user_id_1 = $1 AND user_id_2 = $2 AND status = 'pending'
+        LIMIT 1`,
+        [currentUserId, profileId]
+      );
+      hasPendingRequest = pendingRows.length > 0;
+    }
 
     res.render('profile', {
       user: profileUser,
@@ -247,6 +275,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res: Response) => {
       starredMemes,
       friendCount,
       isFriend,
+      hasPendingRequest,
       session: req.session
     });
   } catch (err) {

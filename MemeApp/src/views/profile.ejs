@@ -42,9 +42,7 @@
       text-shadow: 0 0 25px rgba(255, 0, 0, 0.7);
     }
   </style>
-  
-  <div class="container mx-auto px-6 py-12 max-w-5xl relative z-0">
-    <!-- Notifications Bell -->
+  <!-- Notifications Bell -->
     <div id="notificationWrapper" class="absolute top-6 right-6">
       <button id="notificationBell" class="text-white text-xl hover:text-yellow-300 relative">
       🔔
@@ -57,6 +55,8 @@
       </div>
       </div>
   </div>
+  <div class="container mx-auto px-6 py-12 max-w-5xl relative z-0">
+    
     <div class="bg-black/40 border border-white/10 rounded-3xl p-8 shadow-2xl backdrop-blur-md">
       <div class="flex items-center justify-between flex-wrap gap-6">
         <div class="flex items-center gap-6">
@@ -65,27 +65,38 @@
             <h1 class="text-4xl font-extrabold bg-gradient-to-r from-purple-300 to-pink-400 bg-clip-text text-transparent">
               <%= user.username %>
             </h1>
-            <button id="openFriendsBtn" class="text-sm text-blue-300 hover:text-blue-400 underline mt-1 block transition-all">
+            <button id="openFriendsBtn"
+              class="bg-purple-800/50 hover:bg-purple-700 text-sm text-white px-3 py-1 rounded-md shadow border border-purple-500 transition-all mt-1">
               👥 <%= friendCount %> friend<%= friendCount === 1 ? '' : 's' %>
-            </button>            
+            </button>
+          
           </div>
         </div>
         <% if (session.user && session.user.id === user.id) { %>
-          <!-- Show Edit button on your own profile -->
           <a href="/profile/edit" class="inline-block bg-pink-600 hover:bg-pink-700 text-white font-semibold px-5 py-2 rounded-xl shadow-lg transition-all duration-300">
             ✏️ Edit Profile
           </a>
-        <% } else { %>
-          <!-- Show Add/Remove Friend button on other profiles -->
-          <form method="POST" action="/profile/<%= isFriend ? 'remove-friend' : 'add-friend' %>">
+        <% } else if (isFriend) { %>
+          <form method="POST" action="/profile/remove-friend">
             <input type="hidden" name="targetId" value="<%= user.id %>" />
-            <button type="submit"
-                    class="inline-block px-5 py-2 font-semibold rounded-xl shadow-lg transition-all duration-300
-                           <%= isFriend ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700' %> text-white">
-              <%= isFriend ? '− Remove Friend' : '+ Add Friend' %>
+            <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-md bg-red-600 hover:bg-red-700 text-white shadow-md transition">
+              − Remove Friend
+            </button>
+          </form>
+        <% } else if (hasPendingRequest) { %>
+          <button disabled class="px-4 py-2 text-sm font-semibold rounded-md bg-yellow-600 text-white shadow-md cursor-not-allowed">
+            🕓 Request Sent
+          </button>
+        <% } else { %>
+          <form method="POST" action="/profile/add-friend">
+            <input type="hidden" name="targetId" value="<%= user.id %>" />
+            <button type="submit" class="px-4 py-2 text-sm font-semibold rounded-md bg-green-600 hover:bg-green-700 text-white shadow-md transition">
+              + Add Friend
             </button>
           </form>
         <% } %>
+        
+        
       </div>
 
       <div class="mt-10">
@@ -161,16 +172,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Friends Modal -->
-        <div id="friendsModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-6">
-          <div class="bg-gray-900 max-w-md w-full rounded-xl p-6 shadow-2xl relative">
-            <button onclick="closeFriendsModal()" class="absolute top-3 right-3 text-white text-xl">✖</button>
-            <h2 class="text-xl text-purple-300 mb-4">Your Friends</h2>
-            <input id="friendSearch" type="text" placeholder="Search..." class="w-full mb-3 px-3 py-2 rounded bg-black/40 text-white border border-purple-600/30" />
-            <div id="friendListContainer" class="space-y-3 max-h-96 overflow-y-auto"></div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -190,6 +191,7 @@
         commentsContainer.appendChild(div);
       });
       document.getElementById('memeModal').classList.remove('hidden');
+
     }
   
     function closeMemeModal() {
@@ -197,17 +199,13 @@
     }
   
     async function openFriendsModal() {
-      console.log("🧠 openFriendsModal() triggered");
-  
       document.getElementById('friendsModal').classList.remove('hidden');
       const res = await fetch('/friends/api');
-      console.log("🧠 openFriendsModal() triggered 2");
       const data = await res.json();
-      console.log("Fetched friends:", data.friends);
-  
+
       const container = document.getElementById('friendListContainer');
       const search = document.getElementById('friendSearch');
-  
+
       function renderList(friends) {
         container.innerHTML = '';
         friends.forEach(friend => {
@@ -231,29 +229,35 @@
           info.appendChild(nameLink);
 
           const btn = document.createElement('button');
-          btn.className = `px-3 py-1 text-sm rounded font-medium transition`;
-          btn.innerText = friend.is_friend ? '− Remove' : '+ Add';
-          const colorClasses = friend.is_friend
-            ? ['bg-red-500', 'hover:bg-red-600']
-            : ['bg-green-500', 'hover:bg-green-600'];
-          btn.classList.add(...colorClasses);
+          btn.className = 'px-3 py-1 text-sm rounded font-medium transition';
 
-          btn.onclick = async () => {
-            const route = friend.is_friend ? '/profile/remove-friend' : '/profile/add-friend';
-            const res = await fetch(route, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ targetId: friend.id })
-            });
-            if (res.ok) {
-              btn.innerText = friend.is_friend ? '+ Add' : '− Remove';
-              btn.classList.toggle('bg-red-500');
-              btn.classList.toggle('hover:bg-red-600');
-              btn.classList.toggle('bg-green-500');
-              btn.classList.toggle('hover:bg-green-600');
-              friend.is_friend = !friend.is_friend;
-            }
-          };
+          if (friend.status === 'accepted') {
+            btn.innerText = '− Remove';
+            btn.classList.add('bg-red-500', 'hover:bg-red-600');
+            btn.onclick = async () => {
+              const res = await fetch('/profile/remove-friend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetId: friend.id })
+              });
+              if (res.ok) openFriendsModal(); // reload
+            };
+          } else if (friend.status === 'pending') {
+            btn.innerText = '🕓 Requested';
+            btn.disabled = true;
+            btn.classList.add('bg-yellow-600', 'cursor-not-allowed', 'text-white');
+          } else {
+            btn.innerText = '+ Add';
+            btn.classList.add('bg-green-500', 'hover:bg-green-600');
+            btn.onclick = async () => {
+              const res = await fetch('/profile/add-friend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetId: friend.id })
+              });
+              if (res.ok) openFriendsModal(); // reload
+            };
+          }
 
           wrapper.appendChild(info);
           wrapper.appendChild(btn);
@@ -261,13 +265,13 @@
         });
       }
 
-  
       renderList(data.friends);
       search.oninput = () => {
         const q = search.value.toLowerCase();
         renderList(data.friends.filter(friend => friend.username.toLowerCase().includes(q)));
       };
     }
+
   
     function closeFriendsModal() {
       document.getElementById('friendsModal').classList.add('hidden');
@@ -366,6 +370,17 @@
     </script>
   <% } %>
   </body>
+  <!-- Friends Modal -->
+  <div id="friendsModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex justify-center pt-24">
+    <div class="bg-gray-900 max-w-md w-full rounded-xl p-6 shadow-2xl relative max-h-[80vh] overflow-y-auto">
+      <button onclick="closeFriendsModal()" class="absolute top-3 right-3 text-white text-xl">✖</button>
+      <h2 class="text-xl text-purple-300 mb-4">Friends</h2>
+      <input id="friendSearch" type="text" placeholder="Search..." class="w-full mb-3 px-3 py-2 rounded bg-black/40 text-white border border-purple-600/30" />
+      <div id="friendListContainer" class="space-y-3"></div>
+    </div>
+  </div>
   
+  
+
 </body>
 </html>
