@@ -261,5 +261,20 @@ export const memeTemplates: MemeTemplate[] = [
         description: 'shaq',
         category: 'shaq'
     },
-    
-];
+    {
+        id: 'pooh',
+        url: '/memes/pooh.jpg',
+        captionFields: 2,
+        name: 'pooh',
+        description: 'pooh',
+        category: 'pooh'
+    },
+    {
+        id: 'spongebob',
+        url: '/memes/spongebob.jpg',
+        captionFields: 2,
+        name: 'spongebob',
+        description: 'spongebob',
+        category: 'spongebob'
+    },
+]; 
