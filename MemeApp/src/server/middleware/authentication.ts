@@ -21,8 +21,11 @@ export const requireAuth = (
   next: NextFunction
 ): void => {
   if (!req.session?.userId) {
+    // Save the intended URL to redirect back after login
+    req.session.returnTo = req.originalUrl;
     req.flash('error', 'You must be logged in to access this page');
-    return res.redirect('/auth/login');
+    res.redirect('/auth/login');
+    return;
   }
   next();
 };

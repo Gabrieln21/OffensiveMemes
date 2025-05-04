@@ -44,11 +44,15 @@
         <span id="notificationDot" class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full hidden"></span>
         </button>
         <div id="notificationDropdown" class="absolute right-0 mt-2 w-80 bg-black/90 rounded-lg shadow-xl hidden z-50 text-sm">
-        <div class="p-3 font-bold border-b border-purple-600 text-purple-300">Notifications</div>
-        <div id="notificationList" class="max-h-64 overflow-y-auto divide-y divide-purple-700">
+          <div class="p-3 font-bold border-b border-purple-600 text-purple-300 flex justify-between items-center">
+            <span>Notifications</span>
+            <button id="clearAllNotifications" class="text-xs bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded transition-colors">
+              Clear All
+            </button>
+          </div>
+          <div id="notificationList" class="max-h-64 overflow-y-auto divide-y divide-purple-700">
             <div class="p-3 text-gray-400">Loading...</div>
-        </div>
-        </div>
+          </div>
     </div>
   
     <!-- Floating Phase Message -->
@@ -403,10 +407,12 @@
           position: relative;
           width: 100%;
           max-width: 800px;
-          aspect-ratio: 16 / 9;
+          height: 70vh; /* Use viewport height for consistent sizing */
           margin: 0 auto;
           pointer-events: auto;
-          position: relative;
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 12px;
+          overflow: hidden;
         }
       
         #currentMemeDisplay img,
@@ -416,45 +422,34 @@
           height: 100%;
           object-fit: contain;
           display: block;
-          z-index: 10; /* ✅ Ensure meme image stays on top */
-        }
-      
-        #votingPhase {
-          z-index: 1000; /* ✅ Ensure voting UI is fully on top */
-          position: relative; /* 🔑 needed for z-index to apply */
-        }
-      
-        #currentMemeDisplay .caption {
-          position: absolute;
-          white-space: pre-wrap;
-          z-index: 2;
+          z-index: 10;
+          padding: 16px; /* Add some padding around the image */
         }
 
-        #toggleEmojiSettingsBtn {
-            pointer-events: auto;
-            z-index: 9999;
+        #memeEditorContainer {
+          width: 100%;
+          height: 70vh;
+          background: rgba(255, 255, 255, 0.1);
+          border-radius: 12px;
+          overflow: hidden;
         }
 
-        #emojiSettingsWrapper {
-            pointer-events: auto !important;
-            z-index: 9999 !important;
-            margin-left: auto;
+        #memeCanvasTemplate {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          padding: 16px;
         }
-
-
 
         #submittedMemeImg {
-            max-width: 100%;
-            max-height: 500px;
-            width: auto;
-            height: auto;
-            object-fit: contain;
-            aspect-ratio: 16/9; /* 👈 force consistency */
-        }
-
-
-        #timerBar {
-            transition: width linear;
+          width: 100%;
+          max-width: 800px;
+          height: 70vh;
+          object-fit: contain;
+          margin: 0 auto;
+          padding: 16px;
+          background: rgba(0, 0, 0, 0.2);
+          border-radius: 12px;
         }
 
         #chatSidebar {
@@ -581,17 +576,32 @@
 
         function createTextInput(index) {
             const inputWrapper = document.createElement('div');
+            inputWrapper.className = 'flex gap-2 items-center';
             inputWrapper.innerHTML = `
                 <input 
                     type="text" 
                     placeholder="Caption ${index + 1}" 
-                    class="w-full bg-black/50 text-white p-2 rounded-lg"
+                    class="flex-1 bg-black/50 text-white p-2 rounded-lg"
                     data-index="${index}"
+                >
+                <input 
+                    type="color" 
+                    class="w-8 h-8 rounded cursor-pointer"
+                    data-color-for="${index}"
                 >
             `;
             captionInputs.appendChild(inputWrapper);
-            const input = inputWrapper.querySelector('input');
-            input.addEventListener('input', () => updateTextOverlay(index, input.value));
+            
+            const textInput = inputWrapper.querySelector('input[type="text"]');
+            const colorInput = inputWrapper.querySelector('input[type="color"]');
+            
+            textInput.addEventListener('input', () => updateTextOverlay(index, textInput.value));
+            colorInput.addEventListener('input', (e) => {
+                const overlay = textOverlays.querySelector(`[data-index="${index}"]`);
+                if (overlay) {
+                    overlay.style.color = e.target.value;
+                }
+            });
         }
 
         function updateTextOverlay(index, text) {
@@ -691,7 +701,12 @@
                             counter.textContent = `Rerolls left: ${remaining}`;
                         }
                     } else {
-                        alert(error || 'Reroll failed.');
+                        // Custom error display instead of alert
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                        errorDiv.textContent = error || 'No rerolls remaining';
+                        document.body.appendChild(errorDiv);
+                        setTimeout(() => errorDiv.remove(), 3000);
                     }
                 });
             };
@@ -961,13 +976,21 @@
 
                             window.socket.emit('star_meme', { gameId, imageUrl, captions, templateUrl });
 
+                            // Show temporary success message
+                            const successMsg = document.createElement('div');
+                            successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                            successMsg.textContent = '⭐ Meme starred!';
+                            document.body.appendChild(successMsg);
+                            setTimeout(() => successMsg.remove(), 2000);
+
+                            // Disable button temporarily
                             newStarBtn.disabled = true;
                             newStarBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                            newStarBtn.innerHTML = '⭐ Starred';
+                            setTimeout(() => {
+                                newStarBtn.disabled = false;
+                                newStarBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                            }, 2000);
                         };
-
-
-
                     } else {
                         newStarBtn.classList.add('hidden');
                         newStarBtn.disabled = true;
@@ -1238,52 +1261,53 @@
             const memeModal = document.getElementById('memeCreationModal');
 
             if (phase === 'submitting') {
-                const alreadyEditing = window.isEditingMeme === true;
-                const hasSubmitted = !!window.mySubmittedMeme;
+                // Reset submission state at the start of each submission phase
+                window.isEditingMeme = false;
+                window.mySubmittedMeme = null;
 
                 const submittedMemeImg = document.getElementById('submittedMemeImg');
                 const submittedMemeDisplay = document.getElementById('submittedMemeDisplay');
                 const wrapper = document.getElementById('submittedMemeWrapper');
+                const memeModal = document.getElementById('memeCreationModal');
 
-                // If meme is submitted, show the submitted display and hide the modal
-                const isSubmittedThisRound = state.round?.submissions?.some(sub => sub.playerId === window.myPlayerId);
+                // Clear any previous submission displays
+                if (submittedMemeImg) submittedMemeImg.src = '';
+                if (submittedMemeDisplay) submittedMemeDisplay.classList.add('hidden');
+                if (wrapper) wrapper.classList.add('hidden');
 
-                // If meme is submitted *in this round*, show the display
-                if (hasSubmitted && isSubmittedThisRound && submittedMemeImg && submittedMemeDisplay && wrapper) {
-                    submittedMemeImg.src = window.mySubmittedMeme;
-                    wrapper.classList.remove('hidden');
-                    submittedMemeDisplay.classList.remove('hidden');
+                // Check if player has submitted in this round
+                const isSubmittedThisRound = state.round?.submissions?.some(sub => 
+                    String(sub.playerId) === String(window.myPlayerId)
+                );
 
+                console.log('Submission Phase State:', {
+                    myPlayerId: window.myPlayerId,
+                    isSubmittedThisRound,
+                    submissions: state.round?.submissions
+                });
+
+                if (!isSubmittedThisRound) {
+                    // Show the meme creation modal if not submitted
                     if (memeModal) {
-                        memeModal.classList.add('hidden');
-                        memeModal.classList.remove('flex');
-                        memeModal.style.opacity = "0";
-                        memeModal.style.visibility = "hidden";
-                    }
-
-                    console.log("📸 Showing submitted meme for this round, modal hidden");
-                    } else {
-                    // Else, show the editor
-                    if (memeModal) {
+                        console.log('Showing meme creation modal for new submission');
                         memeModal.classList.remove('hidden');
                         memeModal.classList.add('flex');
                         memeModal.style.opacity = "1";
                         memeModal.style.visibility = "visible";
                         setupSubmissionPhase(state.memeTemplate);
                     }
-                }
-
-
-                // If meme is not submitted and you're not editing, initialize the editor
-                if (!hasSubmitted && !alreadyEditing && memeModal) {
-                    console.log('🎨 Setting up meme creation phase with template:', state.memeTemplate);
-
-                    memeModal.classList.remove('hidden');
-                    memeModal.classList.add('flex');
-                    memeModal.style.opacity = "1";
-                    memeModal.style.visibility = "visible";
-
-                    setupSubmissionPhase(state.memeTemplate);
+                } else {
+                    // Show the submitted meme display
+                    if (submittedMemeImg && window.mySubmittedMeme) {
+                        submittedMemeImg.src = window.mySubmittedMeme;
+                        if (wrapper) wrapper.classList.remove('hidden');
+                        if (submittedMemeDisplay) submittedMemeDisplay.classList.remove('hidden');
+                    }
+                    
+                    if (memeModal) {
+                        memeModal.classList.add('hidden');
+                        memeModal.classList.remove('flex');
+                    }
                 }
 
                 startTimerBarAnimation('submitting', state.timeLeft || 60);
@@ -2116,6 +2140,18 @@
         await loadNotifications();
         await fetch('/notifications/mark-read', { method: 'POST' });
         dot.classList.add('hidden');
+      }
+    });
+
+    // Add Clear All button functionality
+    document.getElementById('clearAllNotifications')?.addEventListener('click', async () => {
+      try {
+        await fetch('/notifications/clear-all', { method: 'POST' });
+        list.innerHTML = '<div class="p-3 text-gray-400">No notifications yet.</div>';
+        dot.classList.add('hidden');
+        dropdown.classList.add('hidden');
+      } catch (err) {
+        console.error('Failed to clear notifications:', err);
       }
     });
   

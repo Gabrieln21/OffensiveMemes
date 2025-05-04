@@ -12,7 +12,7 @@ const router = express.Router();
 // Multer config for avatar uploads
 const storage = multer.diskStorage({
   destination: path.join(__dirname, '../../public/uploads/avatars'),
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     cb(null, Date.now() + '-' + file.originalname);
   }
 });
@@ -114,9 +114,14 @@ router.post('/edit', upload.single('avatar'), async (req: AuthenticatedRequest, 
       const avatarUrl = `/uploads/avatars/${req.file.filename}`;
       await pool.query('UPDATE users SET avatar_url = $1 WHERE id = $2', [avatarUrl, userId]);
       req.session.user!.avatarUrl = avatarUrl;
+      
+      // Add a delay before redirecting to allow the server to process the avatar
+      setTimeout(() => {
+        res.redirect(`/profile/${userId}`);
+      }, 1000);
+    } else {
+      res.redirect(`/profile/${userId}`);
     }
-
-    res.redirect(`/profile/${userId}`);
   } catch (err) {
     console.error('Error updating profile:', err);
     res.status(500).send('Update failed');
@@ -304,7 +309,7 @@ router.post('/star', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // Like a meme
-router.post('/like', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/like', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const userId = req.session.user?.id;
   const { memeId } = req.body;
 
@@ -320,7 +325,17 @@ router.post('/like', async (req: AuthenticatedRequest, res: Response) => {
        ON CONFLICT (user_id, meme_id) DO NOTHING`,
       [userId, memeId]
     );
-    res.json({ success: true });
+    
+    // Get updated like count
+    const { rows } = await pool.query(
+      `SELECT COUNT(*) as count FROM meme_likes WHERE meme_id = $1`,
+      [memeId]
+    );
+    
+    res.json({ 
+      success: true, 
+      likeCount: parseInt(rows[0].count, 10)
+    });
   } catch (err) {
     console.error('Error liking meme:', err);
     res.status(500).json({ success: false });
@@ -328,9 +343,9 @@ router.post('/like', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // Comment on a meme
-router.post('/comment', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/comment', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const userId = req.session.user?.id;
-  const { memeId, content } = req.body;
+  const { memeId, content, profileId } = req.body;
 
   if (!userId || !memeId || !content) {
     res.status(400).json({ success: false, error: 'Missing fields' });
@@ -338,17 +353,25 @@ router.post('/comment', async (req: AuthenticatedRequest, res: Response) => {
   }
 
   try {
-    await pool.query(
+    const { rows } = await pool.query(
       `INSERT INTO meme_comments (user_id, meme_id, content)
-       VALUES ($1, $2, $3)`,
+       VALUES ($1, $2, $3)
+       RETURNING id, content, created_at`,
       [userId, memeId, content]
     );
-    res.redirect('/profile');
+
+    const comment = rows[0];
+    
+    // Redirect back to the original profile page
+    res.redirect(`/profile/${profileId || userId}`);
   } catch (err) {
     console.error('Error adding comment:', err);
     res.status(500).json({ success: false, error: 'Database error' });
   }
 });
+
+
+
 
 router.post('/unstar', async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.session.user?.id;

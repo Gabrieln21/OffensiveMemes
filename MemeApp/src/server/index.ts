@@ -30,7 +30,7 @@ interface SessionIncomingMessage extends IncomingMessage {
   };
 }
 
-const connectPgSimple = require('connect-pg-simple');
+import connectPgSimple from 'connect-pg-simple';
 const app = express();
 
 app.set("views", path.join(__dirname, "../views"));
@@ -206,9 +206,9 @@ const startServer = async (): Promise<void> => {
                     }
               
                     // ✅ Ensure ALL players have their avatarUrl assigned from session
-                    game.players.forEach(p => {
-                      if (!player.avatarUrl || player.avatarUrl === '/uploads/avatars/default-avatar.png') {
-                        player.avatarUrl = sessionUser?.avatarUrl || '/uploads/avatars/default-avatar.png';
+                    game.players.forEach(existingPlayer => {
+                      if (!existingPlayer.avatarUrl || existingPlayer.avatarUrl === '/uploads/avatars/default-avatar.png') {
+                        existingPlayer.avatarUrl = sessionUser?.avatarUrl || '/uploads/avatars/default-avatar.png';
                       }                 
                     });
               
@@ -773,7 +773,7 @@ const startServer = async (): Promise<void> => {
               
                     console.log("🎯 Vote received:", data);
               
-                    const result = gamesService.handleVoteSubmission(socket, data, io);
+                    const result = gamesService.handleVoteSubmission(socket, data);
               
                     if (!result.success) {
                       return callback({ success: false, error: result.error });
@@ -1056,7 +1056,6 @@ const startServer = async (): Promise<void> => {
                     return;
                 }
             
-                const current = game.round.submissions[currentIndex];
                 const player = game.players.find(p => p.socket.id === socket.id);
                 if (!player) return;
             
@@ -1067,6 +1066,22 @@ const startServer = async (): Promise<void> => {
                     phase: game.round.status,
                 });
             
+                // Re-emit the current submission
+                const submission = game.round.submissions[currentIndex];
+                socket.emit('voting_submission', {
+                    template: game.round.memeTemplates,
+                    submission: {
+                        id: submission.id,
+                        playerId: String(submission.playerId),
+                        username: submission.username,
+                        imageUrl: submission.imageUrl,
+                        templateUrl: submission.templateUrl || '',
+                        captions: submission.captions || [],
+                    },
+                    currentIndex: currentIndex + 1,
+                    total: data.total,
+                    timeLeft: game.round.timeLeft,
+                });
             });
             
             

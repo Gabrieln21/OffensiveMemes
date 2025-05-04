@@ -1,10 +1,9 @@
 import fs from 'fs';
-import express, { Request, Response } from "express";
+import express, { Response } from "express";
 import multer from "multer";
 import path from "path";
 import { requireGuest } from "../middleware/authentication";
 import { usersService } from "../../services/users.service";
-import session from 'express-session';
 import type { AuthenticatedRequest } from '../../types/authenticated-request';
 
 
@@ -12,12 +11,12 @@ const router = express.Router();
 
 // 🖼️ Multer config for avatar uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req, _file, cb) => {
     const uploadPath = path.join(process.cwd(), 'src/public/uploads/avatars');
     fs.mkdirSync(uploadPath, { recursive: true });
     cb(null, uploadPath);
   },
-  filename: (req, file, cb) => {
+  filename: (_req, file, cb) => {
     const uniqueName = Date.now() + '-' + file.originalname;
     cb(null, uniqueName);
   }
@@ -77,15 +76,16 @@ router.get('/login', requireGuest, (_req, res) => {
 });
 
 // 🔐 Login route
-router.post('/login', requireGuest, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/login', requireGuest, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { username, password } = req.body;
     const user = await usersService.login(username, password);
 
     if (!user) {
-      return res.status(401).render("auth/login", {
+      res.status(401).render("auth/login", {
         messages: { error: "Invalid username or password" }
       });
+      return;
     }
 
     req.session!.userId = user.id;
@@ -97,7 +97,10 @@ router.post('/login', requireGuest, async (req: AuthenticatedRequest, res: Respo
       winning_message: user.winning_message || ''
     };
 
-    res.redirect("/"); // ✅ Redirect after successful login
+    // Redirect to saved URL or default to home
+    const returnTo = req.session.returnTo || '/';
+    delete req.session.returnTo;
+    res.redirect(returnTo);
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).send("Internal server error");

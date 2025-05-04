@@ -1,16 +1,15 @@
-// routes/notifications.ts or wherever you keep profile/game-related API stuff
-import express, { Request, Response } from "express";
+import express, { Response } from "express";
 import type { AuthenticatedRequest } from '../../types/authenticated-request';
 import { pool } from '../../config/database';
 
 const router = express.Router();
 
-router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
+router.get('/api', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const userId = req.session.user?.id;
-    if (!userId) {
-        res.status(401).json({ error: 'Not logged in' });
-        return;
-    }
+  if (!userId) {
+    res.status(401).json({ error: 'Not logged in' });
+    return;
+  }
 
   try {
     const { rows } = await pool.query(`
@@ -36,41 +35,53 @@ router.get('/api', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-router.post('/mark-read', async (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.session.user?.id;
-    if (!userId) { 
-        res.status(401).json({ error: 'Not logged in' });
-        return;
-    }
-  
-    try {
-      await pool.query(`
-        UPDATE notifications
-        SET is_read = true
-        WHERE user_id = $1 AND is_read = false
-      `, [userId]);
-  
-      res.sendStatus(200);
-    } catch (err) {
-      console.error('❌ Failed to mark notifications as read:', err);
-      res.status(500).json({ error: 'Server error' });
-    }
-  });
-  router.post('/mark-read-single', async (req: AuthenticatedRequest, res: Response) => {
-    const userId = req.session.user?.id;
-    const { id } = req.body;
-    if (!userId || !id) { 
-        res.status(400).json({ error: 'Missing data' });
-        return;
-    }
+// Mark all as read
+router.post('/mark-read', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.session.user?.id) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
 
-  
-    await pool.query(
-        `DELETE FROM notifications WHERE id = $1 AND user_id = $2`,
-        [id, userId]
-    );
-  
-    res.json({ success: true });
-  });
-  
+  await pool.query(
+    `UPDATE notifications 
+     SET is_read = true 
+     WHERE user_id = $1`,
+    [req.session.user.id]
+  );
+
+  res.json({ success: true });
+});
+
+// Delete a single notification
+router.post('/delete-single', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.session.user?.id) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  const { id } = req.body;
+  await pool.query(
+    `DELETE FROM notifications 
+     WHERE id = $1 AND user_id = $2`,
+    [id, req.session.user.id]
+  );
+
+  res.json({ success: true });
+});
+
+// Clear all notifications
+router.post('/clear-all', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  if (!req.session.user?.id) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  await pool.query(
+    `DELETE FROM notifications WHERE user_id = $1`,
+    [req.session.user.id]
+  );
+
+  res.json({ success: true });
+});
+
 export default router;

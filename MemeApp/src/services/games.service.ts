@@ -5,7 +5,7 @@ import { memeTemplates } from '../game/memeTemplates';
 import { ScoringSystem } from '../game/scoring';
 import { pool } from '../config/database';
 import { generateMemeImage } from '../utils/generateMemeImage';
-import { io } from "socket.io-client";
+
 import { deleteUnstarredMemes } from '../utils/deleteUnstarredMemes';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -322,8 +322,7 @@ class GamesService {
         gameId: string,
         voterId: string,
         submissionPlayerId: string,
-        voteType: 'like' | 'meh' | 'pass',
-        io: Server
+        voteType: 'like' | 'meh' | 'pass'
       ): { success: boolean; error?: string; game?: Game } {
         const game = this.getGameById(gameId);
         if (!game || !game.round) return { success: false, error: 'Game or round not found' };
@@ -370,63 +369,41 @@ class GamesService {
     
       handleVoteSubmission(
         socket: Socket,
-        data: { gameId: string; submissionPlayerId: string; voteType: 'like' | 'meh' | 'pass' },
-        io: Server
+        data: { gameId: string; submissionPlayerId: string; voteType: 'like' | 'meh' | 'pass' }
     ): { success: boolean; error?: string } {
         const { gameId, submissionPlayerId, voteType } = data;
         const game = this.getGameById(gameId);
         if (!game || !game.round) {
             return { success: false, error: 'Game or round not found' };
         }
-    
+
         const voterId = socket.data.userId?.toString();
         if (!voterId) {
             return { success: false, error: 'Unauthorized user' };
         }
-    
+
         const submission = game.round.submissions.find(s => s.playerId === submissionPlayerId);
         if (!submission) {
             return { success: false, error: 'Submission not found' };
         }
-    
+
         if (submission.playerId === voterId) {
             console.warn(`⚠️ Player ${voterId} tried to vote on their own meme. Vote ignored.`);
-            // Still advance to next meme, just don't save vote
         } else if (submission.votes.find(v => v.voterId === voterId)) {
             return { success: false, error: 'Already voted on this submission' };
         } else {
             submission.votes.push({ voterId, voteType });
             console.log(`📊 Recorded vote for ${submissionPlayerId}:`, submission.votes);
         }
-    
+
         const voter = game.players.find(p => String(p.userId) === voterId || String(p.id) === voterId);
         if (voter) {
             if (!voter.votedOn) voter.votedOn = [];
             if (!voter.votedOn.includes(submissionPlayerId)) {
                 voter.votedOn.push(submissionPlayerId);
             }
-    
-            const allSubmissions = game.round.submissions;
-            const nextIndex = allSubmissions.findIndex(s => !voter.votedOn!.includes(s.playerId));
-    
         }
-    
-        const totalVoters = game.players.filter(p => String(p.id) !== submissionPlayerId).length;
-        const totalVotes = submission.votes.length;
-        console.log(`🧮 Submission ${submissionPlayerId} has ${totalVotes}/${totalVoters} votes`);
-    
-        const allDone = game.players.every(player => {
-            const others = game.round!.submissions.map(s => String(s.playerId));
-            return others.every(pid => player.votedOn?.includes(pid));
-        });
-    
-        /*
-        if (allDone) {
-            console.log(`✅ All votes submitted in game ${game.id}. Ending round...`);
-            this.endRound(game, io);
-        }
-        */
-    
+
         this.updateGame(game);
         return { success: true };
     }
@@ -613,41 +590,7 @@ class GamesService {
     
     
     
-    private getVoteableSubmissionsForPlayer(game: Game, playerId: string): MemeSubmission[] {
-        const normalizedPlayerId = String(playerId);
-    
-        const player = game.players.find(p =>
-            String(p.id) === normalizedPlayerId ||
-            String(p.userId) === normalizedPlayerId
-        );
-    
-        if (!player) {
-            console.warn(`⚠️ Player not found in getVoteableSubmissionsForPlayer: ${normalizedPlayerId}`);
-            return [];
-        }
-    
-        if (!game.round) {
-            console.warn(`⚠️ No round data available for voteable submission check`);
-            return [];
-        }
-    
-        if (!player.votedOn) {
-            player.votedOn = [];
-        }
-    
-        console.log(`🔎 Checking voteable submissions for ${player.username} (${normalizedPlayerId})`);
-        console.log(`➡️ votedOn:`, player.votedOn);
-    
-        return game.round.submissions.filter(sub => {
-            const submissionOwnerId = String(sub.playerId);
-            const isOwn = submissionOwnerId === String(player.userId); // 🔑 use userId here
-            const alreadyVoted = player.votedOn!.includes(submissionOwnerId);
-            const voteable = !isOwn && !alreadyVoted;
-    
-            console.log(`🧪 Submission ${submissionOwnerId}: Own=${isOwn}, AlreadyVoted=${alreadyVoted}, Voteable=${voteable}`);
-            return voteable;
-        });
-    }
+
     
     
       
@@ -655,16 +598,7 @@ class GamesService {
       
       
     
-    private areAllPlayersDoneVoting(game: Game): boolean {
-        if (!game.round) return false;
-    
-        return game.players.every((player) => {
-            const remaining = this.getVoteableSubmissionsForPlayer(game, String(player.id));
-            console.log(`🔍 Player ${player.id} has ${remaining.length} remaining votes`);
-            console.log(`👀 Player ${player.username} (${player.id}) has ${remaining.length} voteable submissions left`);
-            return remaining.length === 0;
-        });
-    }
+
     
     private sanitizeGameForPlayer(game: Game, playerId: string): any {
         return {
@@ -961,7 +895,6 @@ class GamesService {
             this.timers.delete(gameId);
         }
     }
-
     public cleanupGame(gameId: string): void {
         this.clearTimer(gameId);
 
@@ -986,294 +919,96 @@ class GamesService {
         if (game.passcode) {
             this.games.delete(game.passcode);
         }
-    }
 
+        // Double check if any other games need cleanup
+        const allGames = this.getAllGames();
+        allGames.forEach(g => {
+            if (g.players.length === 0 || g.players.every(p => !p.connected)) {
+                console.log(`🧹 Cleaning up abandoned game ${g.id}`);
+                this.cleanupGame(g.id);
+            }
+        });
+    }
 
     rerollTemplate(gameId: string, playerId: string): {
         success: boolean;
         newTemplate?: MemeTemplate;
         remaining?: number;
         error?: string;
-      } {
+    } {
         const game = this.getGameById(gameId);
         if (!game || !game.round) return { success: false, error: 'Game or round not found' };
-      
+
         const player = game.players.find(p => p.id === playerId);
         if (!player) return { success: false, error: 'Player not found' };
-      
+
         if (player.rerollsRemaining === undefined || player.rerollsRemaining <= 0) {
-          return { success: false, error: 'No rerolls remaining' };
+            return { success: false, error: 'No rerolls remaining' };
         }
-      
-        // 🎲 Choose a new template
-        const newTemplate = this.memeTemplates[Math.floor(Math.random() * this.memeTemplates.length)];
+
+        // Get current template
+        const currentTemplate = game.round.memeTemplates[player.id];
+        if (!currentTemplate) {
+            return { success: false, error: 'Current template not found' };
+        }
+
+        // Choose a new template that's different from the current one
+        let attempts = 0;
+        let newTemplate;
+        do {
+            newTemplate = this.memeTemplates[Math.floor(Math.random() * this.memeTemplates.length)];
+            attempts++;
+        } while (newTemplate.url === currentTemplate.url && attempts < 10);
+
+        // If we couldn't find a different template after 10 attempts, just use any template
+        if (newTemplate.url === currentTemplate.url) {
+            console.log('⚠️ Could not find different template after 10 attempts');
+        }
+
         game.round.memeTemplates[player.id] = newTemplate;
         player.rerollsRemaining--;
-      
+
         this.updateGame(game);
-      
+
         return {
             success: true,
             newTemplate,
             remaining: player.rerollsRemaining,
-          };          
-    }
-      
-
-    handlePlayerDisconnect(gameId: string, playerId: string): void {
-        const game = this.getGameById(gameId);
-        if (!game) return;
-
-        const player = game.players.find((p) => p.id === playerId);
-        if (!player) return;
-
-        player.connected = false;
-
-        // Notify other players about the disconnection
-        game.players.forEach((p) => {
-            if (p.id !== playerId) {
-                p.socket.emit('player_disconnected', {
-                    playerId,
-                    username: player.username,
-                });
-            }
-        });
-
-        // Check if all players are disconnected
-        const allDisconnected = game.players.every((p) => !p.connected);
-        if (allDisconnected) {
-            this.cleanupGame(gameId);
-        } else {
-            this.updateGame(game);
-        }
+        };
     }
 
-    handlePlayerReconnect(
-        gameId: string,
-        playerId: string,
-        socket: Socket
-    ): void {
-        const game = this.getGameById(gameId);
-        if (!game) return;
+    public createRematch(oldGame: Game): Game {
+        // Generate new passcode
+        const newPasscode = Math.floor(1000 + Math.random() * 9000).toString();
 
-        const player = game.players.find((p) => p.id === playerId);
-        if (!player) return;
+        // Create new game with same players
+        const newGame: Game = {
+            id: Math.random().toString(36).substring(2, 15),
+            passcode: newPasscode,
+            players: oldGame.players.map(p => ({
+                ...p,
+                score: 0,
+                hasSubmitted: false,
+                hasVoted: false,
+                votingProgress: 0,
+                currentVoteIndex: 0,
+                votedOn: [],
+                rerollsRemaining: 3,
+                submittedImageUrl: ''
+            })),
+            status: 'waiting',
+            createdAt: new Date(),
+            currentRound: 0,
+            totalRounds: oldGame.totalRounds || 5,
+            roundTime: oldGame.roundTime || 90,
+            votingTime: oldGame.votingTime || 15
+        };
 
-        player.connected = true;
-        player.socket = socket;
-
-        // Send current game state to reconnected player
-        if (game.round) {
-            socket.emit('game_state', {
-                currentRound: game.currentRound,
-                totalRounds: game.totalRounds,
-                round: game.round,
-                memeTemplate: game.round?.memeTemplates[player.id],
-                submissions: game.round?.submissions || [],
-                players: game.players.map((p: Player) => ({
-                    id: p.id,
-                    username: p.username,
-                    score: p.score,
-                    connected: p.connected,
-                    hasSubmitted: p.hasSubmitted,
-                    hasVoted: p.hasVoted,
-                    votedOn: p.votedOn || [],
-                    avatarUrl: p.avatarUrl || '/uploads/avatars/default-avatar.png',
-                    winning_message: p.winning_message,
-                    submittedImageUrl: p.submittedImageUrl
-                })),
-                ...(game.round?.status === 'results' && {
-                  results: game.round?.submissions.map(s => ({
-                    username: s.username,
-                    memeUrl: game.round?.memeTemplates.url, // or generate unique meme images if you support that
-                    votes: s.votes.length
-                  }))
-                })
-              });
-              
-        }
-
-        // Notify other players about the reconnection
-        game.players.forEach((p) => {
-            if (p.id !== playerId) {
-                p.socket.emit('player_reconnected', {
-                    playerId,
-                    username: player.username,
-                });
-            }
-        });
-
-        this.updateGame(game);
-    }
-
-    createRematch(game: Game): Game {
-        const newGame = this.createGame(
-            Math.floor(1000 + Math.random() * 9000).toString(),
-            game.players[0]
-        );
-
-        // Add the rest of the players
-        for (let i = 1; i < game.players.length; i++) {
-            this.joinGame(newGame.passcode, game.players[i]);
-        }
+        // Store in the map by both passcode and id
+        this.games.set(newPasscode, newGame);
+        this.games.set(newGame.id, newGame);
 
         return newGame;
-    }
-
-    private serializeGame(game: Game): string {
-        const serializedGame = {
-            ...game,
-            players: game.players.map((player) => ({
-                ...player,
-                socket: undefined, // remove socket instance
-            })),
-        };
-        return JSON.stringify(serializedGame);
-    }
-
-    private deserializeGame(
-        gameData: string,
-        sockets: Map<string, Socket>
-    ): Game {
-        const parsedGame = JSON.parse(gameData);
-
-        const game = {
-            ...parsedGame,
-            players: parsedGame.players.map((player: Omit<Player, 'socket'>) => ({
-                ...player,
-                socket: sockets.get(player.id) || null,
-            })),
-        };
-
-        return game;
-    }
-
-    async saveGameState(gameId: string): Promise<void> {
-        const game = this.getGameById(gameId);
-        if (!game) return;
-
-        try {
-            const serializedGame = this.serializeGame(game);
-            await pool.query(
-                `INSERT INTO game_states (game_id, state_data, created_at)
-                 VALUES ($1, $2, CURRENT_TIMESTAMP)
-                 ON CONFLICT (game_id) 
-                 DO UPDATE SET state_data = $2, updated_at = CURRENT_TIMESTAMP`,
-                [gameId, serializedGame]
-            );
-        } catch (error) {
-            console.error('Failed to save game state:', error);
-        }
-    }
-
-    async loadGameState(
-        gameId: string,
-        sockets: Map<string, Socket>
-    ): Promise<Game | null> {
-        try {
-            const result = await pool.query(
-                'SELECT state_data FROM game_states WHERE game_id = $1',
-                [gameId]
-            );
-
-            if (result.rows.length === 0) return null;
-
-            return this.deserializeGame(result.rows[0].state_data, sockets);
-        } catch (error) {
-            console.error('Failed to load game state:', error);
-            return null;
-        }
-    }
-
-    private async saveGameStatistics(game: Game): Promise<void> {
-        if (game.status !== 'finished' || !game.winner) return;
-
-        try {
-            await pool.query('BEGIN');
-
-            // Update player statistics
-            for (const player of game.players) {
-                const isWinner = player.userId === game.winner.userId;
-                await pool.query(
-                    `INSERT INTO player_statistics 
-                     (user_id, games_played, games_won, total_points, highest_score)
-                     VALUES ($1, 1, $2, $3, $4)
-                     ON CONFLICT (user_id)
-                     DO UPDATE SET
-                        games_played = player_statistics.games_played + 1,
-                        games_won = player_statistics.games_won + $2,
-                        total_points = player_statistics.total_points + $3,
-                        highest_score = GREATEST(player_statistics.highest_score, $4)`,
-                    [player.userId, isWinner ? 1 : 0, player.score, player.score]
-                );
-            }
-
-            // Save game result
-            await pool.query(
-                `INSERT INTO game_results
-                 (game_id, winner_id, total_rounds, duration_seconds, player_count)
-                 VALUES ($1, $2, $3, $4, $5)`,
-                [
-                    game.id,
-                    game.winner.userId,
-                    game.totalRounds,
-                    Math.floor(
-                        (Date.now() - game.createdAt.getTime()) / 1000
-                    ),
-                    game.players.length,
-                ]
-            );
-
-            await pool.query('COMMIT');
-        } catch (error) {
-            await pool.query('ROLLBACK');
-            console.error('Failed to save game statistics:', error);
-        }
-    }
-
-    private async getPlayerStatistics(userId: number): Promise<any> {
-        try {
-            const result = await pool.query(
-                `SELECT 
-                    games_played,
-                    games_won,
-                    total_points,
-                    highest_score,
-                    ROUND(CAST(games_won AS DECIMAL) / NULLIF(games_played, 0) * 100, 2) as win_rate
-                 FROM player_statistics
-                 WHERE user_id = $1`,
-                [userId]
-            );
-
-            return result.rows[0] || null;
-        } catch (error) {
-            console.error('Failed to get player statistics:', error);
-            return null;
-        }
-    }
-
-    private async getLeaderboard(limit: number = 10): Promise<any[]> {
-        try {
-            const result = await pool.query(
-                `SELECT 
-                    u.username,
-                    ps.games_played,
-                    ps.games_won,
-                    ps.total_points,
-                    ps.highest_score,
-                    ROUND(CAST(ps.games_won AS DECIMAL) / NULLIF(ps.games_played, 0) * 100, 2) as win_rate
-                 FROM player_statistics ps
-                 JOIN users u ON u.id = ps.user_id
-                 ORDER BY ps.total_points DESC, ps.games_won DESC
-                 LIMIT $1`,
-                [limit]
-            );
-
-            return result.rows;
-        } catch (error) {
-            console.error('Failed to get leaderboard:', error);
-            return [];
-        }
     }
 }
 
