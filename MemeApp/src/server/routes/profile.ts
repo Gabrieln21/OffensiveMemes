@@ -353,14 +353,11 @@ router.post('/comment', async (req: AuthenticatedRequest, res: Response): Promis
   }
 
   try {
-    const { rows } = await pool.query(
+    await pool.query(
       `INSERT INTO meme_comments (user_id, meme_id, content)
-       VALUES ($1, $2, $3)
-       RETURNING id, content, created_at`,
+       VALUES ($1, $2, $3)`,
       [userId, memeId, content]
     );
-
-    const comment = rows[0];
     
     // Redirect back to the original profile page
     res.redirect(`/profile/${profileId || userId}`);
