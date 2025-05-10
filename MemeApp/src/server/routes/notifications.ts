@@ -1,6 +1,13 @@
 import express, { Response } from "express";
 import type { AuthenticatedRequest } from '../../types/authenticated-request';
 import { pool } from '../../config/database';
+import { Server } from 'socket.io';
+
+let io: Server;
+
+export const setSocketIO = (socketIO: Server) => {
+  io = socketIO;
+};
 
 const router = express.Router();
 
@@ -83,5 +90,26 @@ router.post('/clear-all', async (req: AuthenticatedRequest, res: Response): Prom
 
   res.json({ success: true });
 });
+
+// Helper function to emit notification to a specific user
+export const emitNotification = async (userId: number, notification: any) => {
+  if (!io) {
+    console.warn('Socket.IO not initialized for notifications');
+    return;
+  }
+
+  // Get the unread count for the red dot
+  const { rows } = await pool.query(
+    `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false`,
+    [userId]
+  );
+  const unreadCount = parseInt(rows[0].count, 10);
+
+  // Emit to all sockets belonging to this user
+  io.to(`user:${userId}`).emit('notification', {
+    ...notification,
+    unreadCount
+  });
+};
 
 export default router;

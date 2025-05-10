@@ -5,6 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Meme Battle</title>
+  <link rel="icon" type="image/png" href="/images/favicon.png">
+  <link rel="shortcut icon" type="image/png" href="/images/favicon.png">
   <!-- Tailwind CSS via CDN (for development only) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -404,6 +406,29 @@
         </div>
     </div>
     <style>
+        @keyframes floatUp {
+            0% {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: translateY(-50px) scale(1.2);
+                opacity: 0.8;
+            }
+            100% {
+                transform: translateY(-100px) scale(0.8);
+                opacity: 0;
+            }
+        }
+
+        .emoji-float {
+            animation: floatUp 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            pointer-events: none;
+            position: absolute;
+            z-index: 50;
+            filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.3));
+        }
+
         #currentMemeDisplay {
           position: relative;
           width: 100%;
@@ -522,10 +547,15 @@
       
     <!-- Meme Creation Logic -->
     <script>
-
-
+    // Global variables for draft management
+    let captionHistory = [];
+    let hasStartedEditing = false;
+    let hasSubmitted = false;
+    let draftSaveInterval;
+    let isAutoSaving = false;
     function initializeMemeCreation(template) {
         console.log("🚀 Running initializeMemeCreation", template);
+        hasStartedEditing = true;
         const memeModal = document.getElementById('memeCreationModal');
         memeModal.classList.remove('hidden');
         memeModal.classList.add('flex');
@@ -724,6 +754,9 @@
     <!-- Main Game Logic -->
     <script>
     document.addEventListener('DOMContentLoaded', () => {
+        // Global variables for custom times
+        window.roundTime = 90;  // Default round time
+        window.votingTime = 15; // Default voting time
         window.votedOnSubmissionIds = [];
         const socket = io();
         window.socket = socket;
@@ -771,61 +804,47 @@
             });
         }
 
-        
-        submitVote = function submitVote(voteType) {
-            const submission = window.currentVotingSubmission;
-            const myId = window.myPlayerId;
+        socket.on('start_game', (data, callback) => {
+                try {
+                    // Set custom times globally
+                    window.roundTime = data.roundTime || 90;
+                    window.votingTime = data.votingTime || 15;
 
-            console.log("🧠 currentVotingSubmission at submitVote:", submission);
-            console.log("🧾 voteType:", voteType, " | gameId:", gameId, " | myId:", myId);
-
-            // Basic checks
-            if (!submission || !submission.playerId) {
-                console.warn("🚫 No valid submission to vote on.");
-                return;
-            }
-
-            if (!gameId) {
-                console.warn("🚨 gameId is missing!");
-                return;
-            }
-
-            if (!voteType) {
-                console.warn("🚨 voteType is missing!");
-                return;
-            }
-
-            // Prevent voting on your own meme
-            if (submission.playerId.toString() === myId?.toString()) {
-                console.warn("⚠️ You can't vote on your own meme. Skipping vote.");
-                return;
-            }
-
-            // ✅ Track that we have seen (and voted on) this meme
-            window.votedOnSubmissionIds = window.votedOnSubmissionIds || [];
-            if (!window.votedOnSubmissionIds.includes(submission.id)) {
-                window.votedOnSubmissionIds.push(submission.id);
-            }
-            console.log("🧠 Updated votedOnSubmissionIds:", window.votedOnSubmissionIds);
-
-            // Submit the vote
-            console.log("🚀 Submitting vote on:", submission);
-
-            socket.emit(
-                'submit_vote',
-                {
-                    gameId,
-                    submissionPlayerId: submission.playerId,
-                    voteType
-                },
-                (response) => {
-                    console.log('📬 Vote submitted response:', response);
-                    if (!response?.success) {
-                        alert("Vote submission failed: " + (response?.error || 'Unknown error'));
+                    const game = gamesService.getGameById(data.gameId);
+                    if (!game) {
+                        return callback({ success: false, error: 'Game not found' });
                     }
+
+                    // Verify the user is the game creator
+                    if (game.players[0].userId !== socket.data.userId) {
+                        return callback({ success: false, error: 'Only the game creator can start the game' });
+                    }
+
+                    // Ensure minimum number of players (2)
+                    if (game.players.length < 2) {
+                        return callback({ success: false, error: 'Need at least 2 players to start' });
+                    }
+
+                    // Apply custom settings
+                    game.totalRounds = Math.max(1, Math.min(data.totalRounds || 1, 10));
+                    game.roundTime = Math.max(30, Math.min(data.roundTime || 90, 180));
+                    game.votingTime = Math.max(10, Math.min(data.votingTime || 15, 60));
+                    game.status = 'playing';
+
+                    gamesService.startNewRound(game.id, io);
+                    gamesService.updateGame(game);
+
+                    io.to(`game:${game.id}`).emit('game_started', {
+                        gameId: game.id,
+                        status: 'playing'
+                    });
+
+                    callback({ success: true });
+                } catch (error) {
+                    console.error('Error starting game:', error);
+                    callback({ success: false, error: error.message });
                 }
-            );
-        };
+            });
 
         window.submitVote = submitVote;
 
@@ -984,8 +1003,11 @@
                             window.socket.emit('star_meme', { gameId, imageUrl, captions, templateUrl });
 
                             // Show temporary success message
+                            const existingMsg = document.querySelector('.star-success-msg');
+                            if (existingMsg) existingMsg.remove();
+
                             const successMsg = document.createElement('div');
-                            successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                            successMsg.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 star-success-msg';
                             successMsg.textContent = '⭐ Meme starred!';
                             document.body.appendChild(successMsg);
                             setTimeout(() => successMsg.remove(), 2000);
@@ -1107,10 +1129,57 @@
                 });
             });
 
+            // Handle submission timeout
+            socket.on('submission_timeout', () => {
+                console.log('🕒 Timeout hit — auto-submitting current draft');
+                const allInputs = document.querySelectorAll('#captionInputs input[type="text"]');
+                const overlays = document.querySelectorAll('#memeTextOverlays div');
+                const captions = [];
 
+                for (let i = 0; i < allInputs.length; i++) {
+                    const input = allInputs[i];
+                    const overlay = overlays[i];
+                    if (input && overlay) {
+                        const overlayRect = overlay.getBoundingClientRect();
+                        const containerRect = document.getElementById('memeEditorContainer').getBoundingClientRect();
+                        const topPx = overlayRect.top - containerRect.top;
+                        const leftPx = overlayRect.left - containerRect.left;
 
+                        captions.push({
+                            text: input.value || ' ', // Use space for empty captions
+                            top: `${topPx}px`,
+                            left: `${leftPx}px`,
+                            width: `${overlay.offsetWidth}px`,
+                            fontSize: overlay.style.fontSize || '36px',
+                            fontFamily: overlay.style.fontFamily || 'Arial',
+                            color: overlay.style.color || '#ffffff'
+                        });
+                    }
+                }
 
-        });
+                if (captions.length > 0) {
+                    socket.emit('submit_meme', { gameId, captions }, (response) => {
+                        if (response.error) {
+                            console.error('❌ Auto-submission failed:', response.error);
+                        } else {
+                            console.log('✅ Auto-submitted meme with captions:', captions);
+                            hasSubmitted = true;
+                            hasStartedEditing = false;
+                            document.getElementById('memeCreationModal')?.classList.add('hidden');
+                            window.isEditingMeme = false;
+
+                            const submittedMemeImg = document.getElementById('submittedMemeImg');
+                            const submittedMemeDisplay = document.getElementById('submittedMemeDisplay');
+                            if (submittedMemeImg && submittedMemeDisplay && response.imageUrl) {
+                                submittedMemeImg.src = response.imageUrl;
+                                const wrapper = document.getElementById('submittedMemeWrapper');
+                                if (wrapper) wrapper.classList.remove('hidden');
+                                submittedMemeDisplay.classList.remove('hidden');
+                            }
+                        }
+                    });
+                }
+            });
 
 
 
@@ -1179,6 +1248,7 @@
                     btn.disabled = true;
                     btn.classList.add('opacity-50', 'cursor-not-allowed');
                 }
+            });
             });
         });
 
@@ -1466,6 +1536,11 @@
 
 
         function setupSubmissionPhase(template) {
+            if (hasStartedEditing && !hasSubmitted) {
+                console.log("🛑 Skipping meme editor reset — user is still editing.");
+                return;
+            }
+
             const submittedMemeImg = document.getElementById('submittedMemeImg');
             const submittedMemeDisplay = document.getElementById('submittedMemeDisplay');
             if (submittedMemeImg) submittedMemeImg.src = '';
@@ -1492,9 +1567,51 @@
 
             initializeMemeCreation(template);
 
+            // Start auto-save interval
+            if (draftSaveInterval) clearInterval(draftSaveInterval);
+            draftSaveInterval = setInterval(saveDraftMeme, 1000);
+
+            // Try to load any existing draft
+            loadDraftMeme();
+
+            // Add undo button
+            const undoButton = document.createElement('button');
+            undoButton.id = 'undoButton';
+            undoButton.textContent = '↩️ Undo';
+            undoButton.className = 'bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded-lg';
+            undoButton.style.marginLeft = '8px';
+            document.getElementById('removeTextButton').parentNode.insertBefore(
+                undoButton,
+                document.getElementById('removeTextButton').nextSibling
+            );
+
+            undoButton.onclick = () => {
+                const lastCaption = captionHistory.pop();
+                if (lastCaption) {
+                    document.getElementById('captionInputs').appendChild(lastCaption.input);
+                    document.getElementById('memeTextOverlays').appendChild(lastCaption.overlay);
+                    saveDraftMeme(); // Save after undoing
+                }
+            };
+
+            // Modify remove text button to store history
+            const removeTextButton = document.getElementById('removeTextButton');
+            removeTextButton.onclick = () => {
+                const inputs = document.getElementById('captionInputs');
+                const overlays = document.getElementById('memeTextOverlays');
+                if (inputs.children.length > 1) {
+                    captionHistory.push({
+                        input: inputs.lastChild.cloneNode(true),
+                        overlay: overlays.lastChild.cloneNode(true)
+                    });
+                    inputs.removeChild(inputs.lastChild);
+                    overlays.removeChild(overlays.lastChild);
+                    saveDraftMeme(); // Save after removing
+                }
+            };
+
             const saveBtn = document.getElementById('saveMeme');
             saveBtn.disabled = false;
-            saveBtn.onclick = null;
             saveBtn.onclick = () => {
                 if (window.submitting) {
                     console.warn("🚫 Already submitting meme. Please wait.");
@@ -1505,70 +1622,46 @@
                 const overlays = document.querySelectorAll('#memeTextOverlays div');
                 const captions = [];
 
-                // Check if we have at least one caption with text
-                let hasValidCaption = false;
-                allInputs.forEach(input => {
-                    if (input.value.trim()) {
-                        hasValidCaption = true;
-                    }
-                });
-
-                if (!hasValidCaption) {
-                    alert('Please add at least one caption before submitting!');
-                    return;
-                }
-
-                const container = document.getElementById('memeEditorContainer');
-                const canvas = document.getElementById('memeCanvasTemplate');
-                const containerRect = container.getBoundingClientRect();
-
-                const displayWidth = canvas.clientWidth;
-                const displayHeight = canvas.clientHeight;
-                const naturalWidth = canvas.naturalWidth;
-                const naturalHeight = canvas.naturalHeight;
-                const scaleX = naturalWidth / displayWidth;
-                const scaleY = naturalHeight / displayHeight;
-
+                // Get all captions, even if empty
                 for (let i = 0; i < allInputs.length; i++) {
                     const text = allInputs[i].value.trim();
                     const overlay = overlays[i];
-                    if (text && overlay) {
+                    if (overlay) {
                         const overlayRect = overlay.getBoundingClientRect();
-                        const topPx = (overlayRect.top - containerRect.top) * scaleY;
-                        const leftPx = (overlayRect.left - containerRect.left) * scaleX;
-                        const widthPx = overlay.offsetWidth * scaleX;
-                        const fontSizePx = parseFloat(overlay.style.fontSize || '36') * scaleY;
+                        const containerRect = document.getElementById('memeEditorContainer').getBoundingClientRect();
+                        const topPx = overlayRect.top - containerRect.top;
+                        const leftPx = overlayRect.left - containerRect.left;
 
                         captions.push({
-                            text,
+                            text: text || ' ', // Use space for empty captions
                             top: `${topPx}px`,
                             left: `${leftPx}px`,
-                            width: `${widthPx}px`,
-                            fontSize: `${fontSizePx}px`,
+                            width: `${overlay.offsetWidth}px`,
+                            fontSize: overlay.style.fontSize || '36px',
                             fontFamily: overlay.style.fontFamily || 'Arial',
                             color: overlay.style.color || '#ffffff'
                         });
                     }
                 }
 
-                if (captions.length === 0) {
-                    alert('Please add at least one caption before submitting!');
-                    return;
-                }
-
                 window.submitting = true;
                 saveBtn.disabled = true;
                 saveBtn.textContent = "Saving...";
+
+                // Clear draft after successful submission
+                localStorage.removeItem(`memeDraft_${gameId}`);
+                if (draftSaveInterval) clearInterval(draftSaveInterval);
 
                 socket.emit("submit_meme", { gameId, captions }, (response) => {
                     window.submitting = false;
                     saveBtn.disabled = false;
                     saveBtn.textContent = "Save Meme";
 
-                    console.log("📤 Meme submission response:", response);
                     if (response.error) {
                         alert(response.error);
                     } else {
+                        hasSubmitted = true;
+                        hasStartedEditing = false;
                         document.getElementById('memeCreationModal')?.classList.add('hidden');
                         window.isEditingMeme = false;
 
@@ -1588,9 +1681,11 @@
             };
 
             document.getElementById('cancelMemeCreation').onclick = () => {
+                if (draftSaveInterval) clearInterval(draftSaveInterval);
                 document.getElementById('memeCreationModal')?.classList.add('hidden');
                 window.isEditingMeme = false;
-                window.submitting = false;
+                hasStartedEditing = false;
+                hasSubmitted = false;
             };
         }
 
@@ -1944,23 +2039,34 @@
             `).join('');
         }
 
+    function startTimerBarAnimation(phase, seconds, submissionId = null) {
+        const bar = document.getElementById('timerBar');
+        if (!bar) return;
 
-        function startTimerBarAnimation(phase, seconds, submissionId = null) {
-            const bar = document.getElementById('timerBar');
-            if (!bar) return;
+        // Skip if already animated this submission in voting phase
+        if (phase === 'voting' && lastAnimatedVotingSubmissionId === submissionId) return;
+        if (phase === 'voting') lastAnimatedVotingSubmissionId = submissionId;
 
-            if (phase === 'voting') {
-                // Skip if already animated this submission
-                if (lastAnimatedVotingSubmissionId === submissionId) return;
-                lastAnimatedVotingSubmissionId = submissionId;
-            }
+        // Reset the bar's transition and width
+        bar.style.transition = 'none';
+        bar.style.width = '100%';
+        void bar.offsetWidth; // Force reflow
 
-            bar.style.transition = 'none';
-            bar.style.width = '100%';
-            void bar.offsetWidth; // force reflow
-            bar.style.transition = `width ${seconds}s linear`;
-            bar.style.width = '0%';
+        // Calculate the total time based on phase
+        let totalTime = seconds;
+        if (phase === 'submitting') {
+            totalTime = window.roundTime || 90; // Use custom round time if set
+        } else if (phase === 'voting') {
+            totalTime = window.votingTime || 15; // Use custom voting time if set
+        } else if (phase === 'results') {
+            totalTime = 30; // Results always show for 30 seconds
         }
+
+        // Start the animation
+        bar.style.transition = `width ${totalTime}s linear`;
+        bar.style.width = '0%';
+    }
+
 
 
 
@@ -2177,12 +2283,21 @@
       }
     });
   
-    setInterval(async () => {
-      const res = await fetch('/notifications/api');
-      const data = await res.json();
-      const hasUnread = data.notifications.some(n => !n.is_read);
-      dot.classList.toggle('hidden', !hasUnread);
-    }, 30000);
+    // Listen for socket notifications
+    window.socket.on('notification', (data) => {
+      // Show the red dot
+      if (data.unreadCount > 0) {
+        dot.classList.remove('hidden');
+      }
+
+      // If dropdown is open, refresh the list
+      if (!dropdown.classList.contains('hidden')) {
+        loadNotifications();
+      }
+    });
+
+    // Initial load
+    loadNotifications();
   </script>
   
   <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>

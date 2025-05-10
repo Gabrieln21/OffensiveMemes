@@ -353,17 +353,44 @@ router.post('/comment', async (req: AuthenticatedRequest, res: Response): Promis
   }
 
   try {
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO meme_comments (user_id, meme_id, content)
-       VALUES ($1, $2, $3)`,
+       VALUES ($1, $2, $3)
+       RETURNING id, user_id, content, created_at`,
       [userId, memeId, content]
     );
+
+    const comment = result.rows[0];
     
-    // Redirect back to the original profile page
-    res.redirect(`/profile/${profileId || userId}`);
+    // Get username for the comment
+    const { rows: [user] } = await pool.query(
+      'SELECT username FROM users WHERE id = $1',
+      [userId]
+    );
+
+    const commentData = {
+      id: comment.id,
+      user_id: comment.user_id,
+      username: user.username,
+      content: comment.content,
+      created_at: comment.created_at
+    };
+
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      res.json({ 
+        success: true, 
+        comment: commentData
+      });
+    } else {
+      res.redirect(`/profile/${profileId}`);
+    }
   } catch (err) {
     console.error('Error adding comment:', err);
-    res.status(500).json({ success: false, error: 'Database error' });
+    if (req.xhr || req.headers.accept?.includes('application/json')) {
+      res.status(500).json({ success: false, error: 'Database error' });
+    } else {
+      res.redirect(`/profile/${profileId}`);
+    }
   }
 });
 

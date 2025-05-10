@@ -142,11 +142,13 @@ class UsersService {
                     json_agg(
                         json_build_object(
                             'user_id', mc.user_id,
+                            'username', u.username,
                             'content', mc.content,
                             'created_at', mc.created_at
                         ) ORDER BY mc.created_at DESC
                     ) FILTER (WHERE mc.content IS NOT NULL) AS comments
                 FROM meme_comments mc
+                JOIN users u ON u.id = mc.user_id
                 GROUP BY meme_id
             ) mc ON mc.meme_id = sm.id
             WHERE sm.user_id = $1

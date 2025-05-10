@@ -256,7 +256,6 @@
           setTimeout(() => {
             window.location.href = getNotificationUrl(n);
           }, 100);
-
         });
   
         list.appendChild(item);
@@ -285,13 +284,23 @@
         dot.classList.add('hidden');
       }
     });
-  
-    setInterval(async () => {
-      const res = await fetch('/notifications/api');
-      const data = await res.json();
-      const hasUnread = data.notifications.some(n => !n.is_read);
-      dot.classList.toggle('hidden', !hasUnread);
-    }, 30000);
+
+    // Listen for socket notifications
+    socket.on('notification', (data) => {
+      // Show the red dot
+      if (data.unreadCount > 0) {
+        dot.classList.remove('hidden');
+      }
+
+      // If dropdown is open, refresh the list
+      if (!dropdown.classList.contains('hidden')) {
+        loadNotifications();
+      }
+    });
+
+    // Initial load
+    loadNotifications();
+
   </script>
   
   <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>

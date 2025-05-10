@@ -1,5 +1,6 @@
 <!-- Tailwind CSS via CDN (for development only) -->
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="/socket.io/socket.io.js"></script>
 <script>
   tailwind.config = {
     theme: {
@@ -235,6 +236,10 @@
     </div>
 </div>
 <script>
+    // Initialize socket connection
+    const socket = io();
+    window.socket = socket;
+
     const bell = document.getElementById('notificationBell');
     const dropdown = document.getElementById('notificationDropdown');
     const dot = document.getElementById('notificationDot');
@@ -259,29 +264,27 @@
         item.href = getNotificationUrl(n);
         item.target = '_blank';
         item.innerText = n.message;
-
-        // 🔥 New logic here
+  
+        // 🧼 Delete after click
         item.addEventListener('click', async (e) => {
-            e.preventDefault(); // don't immediately navigate
-            await fetch('/notifications/mark-read-single', {
+          e.preventDefault();
+          await fetch('/notifications/delete-single', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: n.id })
-            });
-
-            // Remove the clicked notification from the list
-            item.remove();
-
-            // Navigate after short delay (optional)
-            setTimeout(() => {
-                window.location.href = getNotificationUrl(n);
-            }, 100);
-
+          });
+          item.remove();
+          if (list.children.length === 0) {
+            list.innerHTML = '<div class="p-3 text-gray-400">No notifications yet.</div>';
+          }
+          setTimeout(() => {
+            window.location.href = getNotificationUrl(n);
+          }, 100);
         });
-
+  
         list.appendChild(item);
-       });
-
+        if (!n.is_read) hasUnread = true;
+      });
   
       dot.classList.toggle('hidden', !hasUnread);
     }
@@ -299,21 +302,29 @@
   
     bell?.addEventListener('click', async () => {
       dropdown.classList.toggle('hidden');
-  
       if (!dropdown.classList.contains('hidden')) {
         await loadNotifications();
         await fetch('/notifications/mark-read', { method: 'POST' });
         dot.classList.add('hidden');
       }
     });
-  
-    // 🔄 Periodic poll for unread notifications
-    setInterval(async () => {
-      const res = await fetch('/notifications/api');
-      const data = await res.json();
-      const hasUnread = data.notifications.some(n => !n.is_read);
-      dot.classList.toggle('hidden', !hasUnread);
-    }, 30000);
+
+    // Listen for socket notifications
+    socket.on('notification', (data) => {
+      // Show the red dot
+      if (data.unreadCount > 0) {
+        dot.classList.remove('hidden');
+      }
+
+      // If dropdown is open, refresh the list
+      if (!dropdown.classList.contains('hidden')) {
+        loadNotifications();
+      }
+    });
+
+    // Initial load
+    loadNotifications();
+
   </script>
   
   <!-- 🔴 Phase 4 red dot reveal (server-rendered fallback) -->

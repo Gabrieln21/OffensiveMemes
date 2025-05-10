@@ -1,5 +1,6 @@
 <!-- Tailwind CSS via CDN (for development only) -->
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="/socket.io/socket.io.js"></script>
 <script>
     tailwind.config = {
         theme: {
@@ -145,6 +146,10 @@
 </div>
 <!-- Notification Scripts -->
 <script>
+    // Initialize socket connection
+    const socket = io();
+    window.socket = socket;
+
     const bell = document.getElementById('notificationBell');
     const dropdown = document.getElementById('notificationDropdown');
     const dot = document.getElementById('notificationDot');
@@ -185,7 +190,6 @@
           setTimeout(() => {
             window.location.href = getNotificationUrl(n);
           }, 100);
-
         });
   
         list.appendChild(item);
@@ -214,20 +218,28 @@
         dot.classList.add('hidden');
       }
     });
+
+    // Listen for socket notifications
+    socket.on('notification', (data) => {
+      // Show the red dot
+      if (data.unreadCount > 0) {
+        dot.classList.remove('hidden');
+      }
+
+      // If dropdown is open, refresh the list
+      if (!dropdown.classList.contains('hidden')) {
+        loadNotifications();
+      }
+    });
+
+    // Initial load
+    loadNotifications();
+</script>
   
-    setInterval(async () => {
-      const res = await fetch('/notifications/api');
-      const data = await res.json();
-      const hasUnread = data.notifications.some(n => !n.is_read);
-      dot.classList.toggle('hidden', !hasUnread);
-    }, 30000);
+<% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('notificationDot')?.classList.remove('hidden');
+    });
   </script>
-  
-  <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>
-    <script>
-      document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('notificationDot')?.classList.remove('hidden');
-      });
-    </script>
-  <% } %>
-  
+<% } %>

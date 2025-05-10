@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Your Friends</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -139,6 +140,9 @@
   
 
   <script>
+    // Initialize socket connection
+    const socket = io();
+    window.socket = socket;
     document.getElementById('friendSearchForm')?.addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('usernameSearch').value.trim();
@@ -175,7 +179,7 @@
     });
   </script>
 
-  <!-- Notification Scripts -->
+<!-- Notification Scripts -->
 <script>
     const bell = document.getElementById('notificationBell');
     const dropdown = document.getElementById('notificationDropdown');
@@ -215,7 +219,7 @@
             list.innerHTML = '<div class="p-3 text-gray-400">No notifications yet.</div>';
           }
           setTimeout(() => {
-            window.location.href = getNotificationUrl(n);
+            window.open(getNotificationUrl(n), '_blank');
           }, 100);
         });
   
@@ -245,13 +249,23 @@
         dot.classList.add('hidden');
       }
     });
-  
-    setInterval(async () => {
-      const res = await fetch('/notifications/api');
-      const data = await res.json();
-      const hasUnread = data.notifications.some(n => !n.is_read);
-      dot.classList.toggle('hidden', !hasUnread);
-    }, 30000);
+
+    // Listen for socket notifications
+    window.socket.on('notification', (data) => {
+      // Show the red dot
+      if (data.unreadCount > 0) {
+        dot.classList.remove('hidden');
+      }
+
+      // If dropdown is open, refresh the list
+      if (!dropdown.classList.contains('hidden')) {
+        loadNotifications();
+      }
+    });
+
+    // Initial load
+    loadNotifications();
+
   </script>
   
   <% if (typeof unreadCount !== 'undefined' && unreadCount > 0) { %>

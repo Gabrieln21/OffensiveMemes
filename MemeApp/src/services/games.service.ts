@@ -65,8 +65,9 @@ export interface Player {
     avatarUrl?: string;
     rerollsRemaining?: number;
     winning_message?: string;
-    disconnectTimeout?: NodeJS.Timeout; // 👈 Add this line
+    disconnectTimeout?: NodeJS.Timeout;
     submittedImageUrl?: string;
+    usedTemplates?: Set<string>;
   }
   
 
@@ -846,6 +847,11 @@ class GamesService {
     
             // ✅ Auto-submit if needed during submitting phase
             if (currentGame.round.timeLeft <= 0 && currentGame.round.status === 'submitting') {
+                // Emit submission_timeout to all players
+                currentGame.players.forEach(player => {
+                    player.socket.emit('submission_timeout');
+                });
+
                 for (const player of currentGame.players) {
                     if (!player.hasSubmitted) {
                         const result = await this.submitMeme(
@@ -901,6 +907,17 @@ class GamesService {
         const game = this.getGameById(gameId);
         if (!game) return;
 
+        // Clear all game-related timers
+        if (game.votingTimer) clearTimeout(game.votingTimer);
+        if (game.nextRoundTimer) clearTimeout(game.nextRoundTimer);
+        
+        // Clear player disconnect timers
+        game.players.forEach(player => {
+            if (player.disconnectTimeout) {
+                clearTimeout(player.disconnectTimeout);
+            }
+        });
+
         // 🧼 Delete unstarred memes
         deleteUnstarredMemes(gameId).catch(err => {
             console.error(`❌ Error cleaning up memes for ${gameId}:`, err);
@@ -908,13 +925,17 @@ class GamesService {
 
         // Notify all players the game is ending
         game.players.forEach((player) => {
-            player.socket.emit('game_cleanup', {
-                message: 'Game session ended',
-                gameId: game.id,
-            });
+            try {
+                player.socket.emit('game_cleanup', {
+                    message: 'Game session ended',
+                    gameId: game.id,
+                });
+            } catch (err) {
+                console.warn(`Failed to notify player ${player.username} about game cleanup:`, err);
+            }
         });
 
-        // Remove game from storage
+        // Remove game from storage (both by ID and passcode)
         this.games.delete(game.id);
         if (game.passcode) {
             this.games.delete(game.passcode);
@@ -922,9 +943,15 @@ class GamesService {
 
         // Double check if any other games need cleanup
         const allGames = this.getAllGames();
-        allGames.forEach(g => {
-            if (g.players.length === 0 || g.players.every(p => !p.connected)) {
-                console.log(`🧹 Cleaning up abandoned game ${g.id}`);
+        const abandonedGames = allGames.filter(g => 
+            g.players.length === 0 || 
+            g.players.every(p => !p.connected) ||
+            (g.status === 'finished' && Date.now() - g.createdAt.getTime() > 30 * 60 * 1000) // 30 minutes old
+        );
+
+        abandonedGames.forEach(g => {
+            console.log(`🧹 Cleaning up abandoned game ${g.id}`);
+            if (g.id !== gameId) { // Avoid recursive cleanup
                 this.cleanupGame(g.id);
             }
         });
@@ -952,21 +979,29 @@ class GamesService {
             return { success: false, error: 'Current template not found' };
         }
 
-        // Choose a new template that's different from the current one
-        let attempts = 0;
-        let newTemplate;
-        do {
-            newTemplate = this.memeTemplates[Math.floor(Math.random() * this.memeTemplates.length)];
-            attempts++;
-        } while (newTemplate.url === currentTemplate.url && attempts < 10);
+        // Get previously used templates for this player in this game
+        if (!player.usedTemplates) player.usedTemplates = new Set([currentTemplate.url]);
+        else player.usedTemplates.add(currentTemplate.url);
 
-        // If we couldn't find a different template after 10 attempts, just use any template
-        if (newTemplate.url === currentTemplate.url) {
-            console.log('⚠️ Could not find different template after 10 attempts');
+        // Find a template that hasn't been used yet
+        const unusedTemplates = this.memeTemplates.filter(t => !player.usedTemplates?.has(t.url));
+        
+        // If all templates have been used, allow reuse but avoid the current one
+        const availableTemplates = unusedTemplates.length > 0 ? 
+            unusedTemplates : 
+            this.memeTemplates.filter(t => t.url !== currentTemplate.url);
+
+        if (availableTemplates.length === 0) {
+            return { success: false, error: 'No more unique templates available' };
         }
 
+        // Choose a random template from available ones
+        const newTemplate = availableTemplates[Math.floor(Math.random() * availableTemplates.length)];
         game.round.memeTemplates[player.id] = newTemplate;
         player.rerollsRemaining--;
+
+        if (!player.usedTemplates) player.usedTemplates = new Set();
+        player.usedTemplates.add(newTemplate.url);
 
         this.updateGame(game);
 

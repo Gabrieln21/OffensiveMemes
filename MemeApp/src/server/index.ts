@@ -16,7 +16,7 @@ import { gamesService, Game, Player } from "../services/games.service";
 import session, { Session } from 'express-session';
 import profileRoutes from './routes/profile';
 import friendsRoutes from './routes/friends';
-import notificationsRoutes from './routes/notifications';
+import notificationsRoutes, { setSocketIO } from './routes/notifications';
 
 interface SessionIncomingMessage extends IncomingMessage {
   session: Session & {
@@ -130,13 +130,20 @@ const startServer = async (): Promise<void> => {
     app.use("/leaderboard", leaderboard);
     app.use("/rules", rules);
     app.use("/messagetest", messagetest);
-    app.use('/profile', profileRoutes); // ✅ This is correct and safe
+    app.use('/profile', profileRoutes);
     app.use('/friends', friendsRoutes);
+    
+    // Initialize socket.io for notifications
+    setSocketIO(io);
     app.use('/notifications', notificationsRoutes);
 
-    // 404 and error handlers
-    app.use((_req: Request, _res: Response, next: NextFunction) => {
-      next(createError(404));
+    // Add socket connection handler for user-specific rooms
+    io.on('connection', (socket: Socket) => {
+      const userId = socket.data.userId;
+      if (userId) {
+        socket.join(`user:${userId}`);
+        console.log(`🔔 User ${userId} joined their notification room`);
+      }
     });
 
     app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
@@ -573,11 +580,27 @@ const startServer = async (): Promise<void> => {
                     const memeOwnerId = rows[0]?.user_id;
 
                     if (memeOwnerId && memeOwnerId !== userId) {
+                        // Insert notification
                         await pool.query(
                             `INSERT INTO notifications (user_id, from_user_id, type, message)
                             VALUES ($1, $2, 'star_meme', $3)`,
                             [memeOwnerId, userId, `${username} starred your meme!`]
                         );
+
+                        // Get unread count for real-time update
+                        const { rows: countRows } = await pool.query(
+                            `SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false`,
+                            [memeOwnerId]
+                        );
+                        const unreadCount = parseInt(countRows[0].count, 10);
+
+                        // Emit to owner's socket room
+                        io.to(`user:${memeOwnerId}`).emit('notification', {
+                            type: 'star_meme',
+                            message: `${username} starred your meme!`,
+                            unreadCount
+                        });
+
                         console.log(`🔔 Notification sent to user ${memeOwnerId}`);
                     }
 
